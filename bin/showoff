@@ -159,6 +159,15 @@ module Wrapper
   desc 'Serves the showoff presentation in the specified (or current) directory'
   arg_name "[pres_dir]"
   default_value "."
+  long_desc <<-EOS
+Starts a web server to display your presentation. By default, the server
+runs on http://0.0.0.0:9090
+
+To use the legacy server architecture (deprecated):
+  SHOWOFF_USE_LEGACY_SERVER=true showoff serve
+
+Options:
+EOS
   command :serve do |c|
 
     c.desc 'Show verbose messaging'
@@ -255,21 +264,47 @@ module Wrapper
         puts
       end
 
+      # Determine which architecture to use
+      use_legacy_server = ENV['SHOWOFF_USE_LEGACY_SERVER'] == 'true' || ENV['SHOWOFF_USE_LEGACY_SERVER'] == '1'
+
+      # Show deprecation warning if legacy server is used
+      if use_legacy_server
+        STDERR.puts "\n\033[31mWARNING: Legacy server architecture is deprecated and will be removed in v0.23.0.\033[0m"
+        STDERR.puts "\033[31mPlease test with the new architecture and report issues.\033[0m\n\n"
+      end
+
+      # Helper method to configure SSL
+      configure_ssl = lambda do |server, opts|
+        if opts[:ssl]
+          server.ssl = true
+          server.ssl_options = ssl_options
+        end
+      end
+
+      # Git repository handling (same for both architectures)
       if options[:url]
         ShowoffUtils.clone(options[:git_url], options[:git_branch], options[:git_path]) do
-          Showoff.run!(options) do |server|
-            if options[:ssl]
-              server.ssl         = true
-              server.ssl_options = ssl_options
+          if use_new_server
+            # New architecture
+            Showoff::ServerAdapter.run!(options) do |server|
+              configure_ssl.call(server, options)
+            end
+          else
+            # Legacy architecture
+            Showoff.run!(options) do |server|
+              configure_ssl.call(server, options)
             end
           end
         end
-
       else
-        Showoff.run!(options) do |server|
-          if options[:ssl]
-            server.ssl         = true
-            server.ssl_options = ssl_options
+        # Direct invocation (no git clone)
+        if use_new_server
+          Showoff::ServerAdapter.run!(options) do |server|
+            configure_ssl.call(server, options)
+          end
+        else
+          Showoff.run!(options) do |server|
+            configure_ssl.call(server, options)
           end
         end
       end
@@ -353,13 +388,23 @@ module Wrapper
       ENV['GLI_DEBUG'] = 'true'
     end
 
-    if global[:dev]
-      require 'showoff_ng'
+    # Feature flag for new server architecture
+    use_new_server = ENV['SHOWOFF_USE_NEW_SERVER'] == 'true' || ENV['SHOWOFF_USE_NEW_SERVER'] == '1'
 
+    # Route commands to appropriate backend
+    if global[:dev] || ['static', 'pdf'].include?(command.name.to_s)
+      # Static/PDF always use showoff_ng
+      require 'showoff_ng'
       if options[:file]
         Showoff::Config.load(options[:file])
       end
+    elsif use_new_server && command.name == :serve
+      # New server architecture (opt-in via env var)
+      require 'showoff_ng'
+      require 'showoff/server'
+      require 'showoff/server_adapter'
     else
+      # Legacy architecture (default)
       require 'showoff'
     end
 

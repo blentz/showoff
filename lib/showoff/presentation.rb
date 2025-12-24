@@ -4,7 +4,7 @@ class Showoff::Presentation
   require 'showoff/compiler'
   require 'keymap'
 
-  attr_reader :sections
+  attr_reader :sections, :title, :favicon, :feedback, :pause_msg, :language, :interactive, :keymap, :keycode_dictionary, :keycode_shifted_keys, :highlightStyle
 
   def initialize(options)
     @options  = options
@@ -59,7 +59,8 @@ class Showoff::Presentation
   # dynamically loaded after the page is displayed. This increases perceived
   # responsiveness.
   def index
-    ERB.new(File.read(File.join(Showoff::GEMROOT, 'views','index.erb')), nil, '-').result(binding)
+    template_path = File.join(Showoff::GEMROOT, 'views','index.erb')
+    ShowoffUtils.create_erb(File.read(template_path)).result(binding)
   end
 
   def slides
@@ -81,7 +82,8 @@ class Showoff::Presentation
       template = 'onepage.erb'
     end
 
-    ERB.new(File.read(File.join(Showoff::GEMROOT, 'views', template)), nil, '-').result(binding)
+    template_path = File.join(Showoff::GEMROOT, 'views', template)
+    ShowoffUtils.create_erb(File.read(template_path)).result(binding)
   end
 
   # Generates a list of all image/font/etc files used by the presentation. This
@@ -126,8 +128,11 @@ class Showoff::Presentation
     files.uniq
   end
 
+  # Use the ShowoffUtils.create_erb helper method
+
   def erb(template)
-    ERB.new(File.read(File.join(Showoff::GEMROOT, 'views', "#{template}.erb")), nil, '-').result(binding)
+    template_path = File.join(Showoff::GEMROOT, 'views', "#{template}.erb")
+    ShowoffUtils.create_erb(File.read(template_path)).result(binding)
   end
 
   def css_files

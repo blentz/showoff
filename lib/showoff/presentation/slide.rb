@@ -1,4 +1,5 @@
 require 'erb'
+require 'showoff_utils'
 
 class Showoff::Presentation::Slide
   attr_reader :section, :section_title, :name, :seq, :id, :ref, :background, :transition, :form, :markdown, :classes
@@ -27,7 +28,8 @@ class Showoff::Presentation::Slide
       content  = template.gsub(/~~~CONTENT~~~/, content)
     end
 
-    ERB.new(File.read(File.join(Showoff::GEMROOT, 'views','slide.erb')), nil, '-').result(binding)
+    template_path = File.join(Showoff::GEMROOT, 'views','slide.erb')
+    ShowoffUtils.create_erb(File.read(template_path)).result(binding)
   end
 
   # This is a list of classes that we want applied *only* to content, and not to the slide,

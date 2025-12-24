@@ -1,5 +1,19 @@
 class ShowoffUtils
 
+  # Helper method to create ERB objects with compatibility for different Ruby versions
+  # @param template_string [String] The ERB template string
+  # @param trim_mode [String] The ERB trim mode (default: '-')
+  # @return [ERB] A properly configured ERB object
+  def self.create_erb(template_string, trim_mode = '-')
+    if RUBY_VERSION >= '2.6'
+      # Ruby 2.6+ supports keyword arguments for ERB.new
+      ERB.new(template_string, trim_mode: trim_mode)
+    else
+      # Ruby < 2.6 uses positional arguments
+      ERB.new(template_string, nil, trim_mode)
+    end
+  end
+
   # Helper method to parse a comma separated options string and stores
   # the result in a dictionrary
   #

@@ -516,38 +516,33 @@ class Showoff
         broadcast_to_audience(control)
       end
 
-      # Handle 'feedback' message - write feedback to file
-      #
-      # @param ws [WebSocket] The WebSocket connection
-      # @param control [Hash] The message payload
-      # @param request_context [Hash] Request context
-      # @return [void]
-      def handle_feedback(ws, control, request_context)
-        # TODO: Extract to FeedbackManager in future refactoring
-        # For now, keep file I/O here to maintain compatibility
+       # Handle 'feedback' message - delegate to FeedbackManager
+       #
+       # @param ws [WebSocket] The WebSocket connection
+       # @param control [Hash] The message payload
+       # @param request_context [Hash] Request context
+       # @return [void]
+       def handle_feedback(ws, control, request_context)
+         # Get settings from the Sinatra app
+         settings = Sinatra::Application.settings
 
-        # Get settings from the Sinatra app
-        settings = Sinatra::Application.settings
+         # Get feedback manager instance
+         feedback_manager = settings.respond_to?(:feedback_manager) ? settings.feedback_manager : Showoff::Server::FeedbackManager.new("#{settings.statsdir}/#{settings.feedback}")
 
-        filename = "#{settings.statsdir}/#{settings.feedback}"
-        slide = control['slide']
-        rating = control['rating']
-        feedback = control['feedback']
+         # Extract data from message
+         slide = control['slide']
+         rating = control['rating']
+         feedback_text = control['feedback']
 
-        begin
-          log = File.exist?(filename) ? JSON.parse(File.read(filename)) : {}
-        rescue JSON::ParserError
-          log = {}
-        end
+         # Get session ID from connection info
+         info = @mutex.synchronize { @connections[ws] }
+         session_id = info ? info[:session_id] : 'unknown'
 
-        log[slide] ||= []
-        log[slide] << { rating: rating, feedback: feedback }
+         # Submit feedback
+         feedback_manager.submit_feedback(slide, session_id, rating, feedback_text)
 
-        if settings.verbose
-          File.write(filename, JSON.pretty_generate(log))
-        else
-          File.write(filename, log.to_json)
-        end
+         # Save to disk
+         feedback_manager.save_to_disk
       end
     end
   end

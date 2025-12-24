@@ -22,17 +22,20 @@
 
 ```
 lib/
-├── showoff.rb           # Monolithic Sinatra app (2000+ LOC) - serves `serve` command
-├── showoff_ng.rb        # Clean orchestrator (100 LOC) - serves `static`/`pdf` via --dev
+├── showoff.rb           # Legacy monolithic Sinatra app (DEPRECATED)
+├── showoff_ng.rb        # Clean orchestrator - serves `static`/`pdf`
 ├── showoff_utils.rb     # Utilities, MarkdownConfig
 ├── commandline_parser.rb # Parslet parser for shell blocks
 └── showoff/
-    ├── compiler.rb      # Markdown→HTML orchestrator (showoff_ng)
+    ├── compiler.rb      # Markdown→HTML orchestrator
     ├── config.rb        # showoff.json loader
     ├── presentation.rb  # Presentation model
     ├── state.rb         # Global state singleton
+    ├── server.rb        # New modular Sinatra::Base server
+    ├── server_adapter.rb # CLI compatibility layer
     ├── compiler/        # Pipeline stages (notes, forms, i18n, etc.)
-    └── presentation/    # Section/Slide models
+    ├── presentation/    # Section/Slide models
+    └── server/          # Server components (managers, routes)
 ```
 
 ## Commands
@@ -53,7 +56,7 @@ rake spec                     # Run RSpec tests
    - `showoff.rb` = Monolithic god class (DEPRECATED). Routes, markdown, websockets, forms, stats inline.
    - `showoff_ng.rb` = Clean orchestrator delegating to modular `Showoff::*` classes.
    - `serve` command now uses new architecture by default.
-   - **Legacy code will be removed in v0.23.0. All new code must follow showoff_ng patterns.**
+   - **Legacy code will be removed in v0.24.0. All new code must follow showoff_ng patterns.**
 
 2. **Compilation Pipeline (showoff_ng):**
    Markdown → Variables → i18n → Tilt → Nokogiri DOM → Forms → Fixups → Glossary → Downloads → Notes
@@ -62,12 +65,23 @@ rake spec                     # Run RSpec tests
 
 4. **Config:** `showoff.json` in presentation root defines sections, styles, templates.
 
+5. **Server Components (new architecture):**
+   - `Showoff::Server` - Sinatra::Base subclass with modular routes
+   - `Showoff::ServerAdapter` - CLI compatibility layer
+   - `SessionState` - Thread-safe session management
+   - `StatsManager` - Statistics tracking with JSON persistence
+   - `FormManager` - Form response storage and aggregation
+   - `CacheManager` - LRU cache with hit/miss tracking
+   - `WebSocketManager` - Real-time slide synchronization
+   - `FeedbackManager` - Audience feedback collection
+
 ## Testing
 
 - **Framework:** RSpec
 - **Location:** `spec/unit/showoff/`
 - **Fixtures:** `spec/fixtures/`
 - **Run:** `rake spec` or `rspec spec/unit/`
+- **Coverage:** 507 examples, 0 failures, 100% on new components
 
 ## Key Files by Task
 
@@ -79,6 +93,8 @@ rake spec                     # Run RSpec tests
 | Slides | `lib/showoff/presentation/slide.rb`, `views/slide.erb` |
 | Config | `lib/showoff/config.rb` |
 | Static/PDF | `Showoff.do_static()` in main app |
+| Server | `lib/showoff/server.rb`, `lib/showoff/server_adapter.rb` |
+| WebSocket | `lib/showoff/server/websocket_manager.rb` |
 
 ## Conventions
 

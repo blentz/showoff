@@ -114,9 +114,9 @@ Note: The legacy server will display deprecation warnings and will be removed in
 ## Timeline
 
 - **v0.21.0**: Opt-in via `SHOWOFF_USE_NEW_SERVER=true`
-- **v0.22.0** (Current): New architecture as default, legacy opt-out with `SHOWOFF_USE_LEGACY_SERVER=true`
-- **v0.23.0** (+3 months): Legacy architecture removed
-- **v0.24.0** (+6 months): Compatibility shims removed
+- **v0.22.0** (Current): New architecture is default, legacy opt-out with `SHOWOFF_USE_LEGACY_SERVER=true`
+- **v0.23.0**: Legacy architecture deprecated with warnings
+- **v0.24.0**: Legacy architecture removed
 
 ## Technical Details
 

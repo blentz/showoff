@@ -531,9 +531,17 @@ each. No data loss, race conditions, or corruption detected.
 * Performance benchmarking
 * Deployment testing
 
+*Phase 5b: Default Switch (v0.22.0)* - ✓ COMPLETE
+* New architecture is now the DEFAULT
+* Legacy mode available via +SHOWOFF_USE_LEGACY_SERVER=true+
+* Documentation updated for v0.22.0 release
+* MIGRATION_GUIDE.md created
+* CHANGELOG.txt updated
+
 === Remaining Work
 
-*All phases complete* ✓
+*Phase 5c (v0.23.0):* Add deprecation warnings for legacy mode
+*Phase 5d (v0.24.0):* Remove legacy code path
 
 *Estimated Total Remaining:* 0 days
 
@@ -568,6 +576,7 @@ See +documentation/+ directory for detailed architecture and progress documentat
 * WEBSOCKET_MANAGER_QUICK_REF.md - WebSocket API quick reference
 * FEEDBACKMANAGER_DESIGN.md - Feedback manager design specification
 * USAGE_NEW_SERVER.md - User guide for new server architecture
+* MIGRATION_GUIDE.md - Migration guide for users upgrading to v0.22.0
 
 == Contributing
 

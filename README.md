@@ -62,6 +62,30 @@ you'll need to install both Ruby and the Ruby DevKit for compiling native extens
     gem install showoff
 
 
+## What's New in v0.22.0
+
+Version 0.22.0 introduces a completely refactored server architecture that is now
+the default. This new architecture provides:
+
+* **Modular codebase**: Clean separation of concerns for easier maintenance
+* **Thread-safe state management**: Improved reliability under concurrent load
+* **Better error handling**: More informative error messages and graceful failures
+* **Comprehensive test coverage**: 507 tests with 100% coverage on new components
+
+### For Existing Users
+
+The new architecture is fully backward compatible. Your existing presentations
+should work without any changes. If you encounter any issues:
+
+```bash
+# Temporarily use the legacy server (deprecated, will be removed in v0.24.0)
+SHOWOFF_USE_LEGACY_SERVER=true showoff serve
+```
+
+See [documentation/MIGRATION_GUIDE.md](documentation/MIGRATION_GUIDE.md) for
+detailed migration information.
+
+
 ## Documentation
 
 Please see the user manual on the [Showoff homepage](http://binford2k.github.io/showoff)

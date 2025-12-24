@@ -269,8 +269,8 @@ EOS
 
       # Show deprecation warning if legacy server is used
       if use_legacy_server
-        STDERR.puts "\n\033[31mWARNING: Legacy server architecture is deprecated and will be removed in v0.23.0.\033[0m"
-        STDERR.puts "\033[31mPlease test with the new architecture and report issues.\033[0m\n\n"
+        STDERR.puts "\n\033[33mWARNING: Legacy server architecture is deprecated and will be removed in v0.24.0.\033[0m"
+        STDERR.puts "\033[33mPlease test with the new architecture and report issues.\033[0m\n\n"
       end
 
       # Helper method to configure SSL
@@ -395,8 +395,8 @@ EOS
 
     # Show deprecation warning if legacy server is used
     if use_legacy_server && command.name == :serve
-      STDERR.puts "\n\033[31mWARNING: Legacy server architecture is deprecated and will be removed in v0.23.0.\033[0m"
-      STDERR.puts "\033[31mPlease test with the new architecture and report issues.\033[0m\n\n"
+      STDERR.puts "\n\033[33mWARNING: Legacy server architecture is deprecated and will be removed in v0.24.0.\033[0m"
+      STDERR.puts "\033[33mPlease test with the new architecture and report issues.\033[0m\n\n"
     end
 
     # Route commands to appropriate backend

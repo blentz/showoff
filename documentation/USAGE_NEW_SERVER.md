@@ -47,11 +47,11 @@ If you encounter any issues with the new architecture:
    - Include the presentation file structure
    - Describe the expected vs. actual behavior
    - Include any error messages from the console
-   - Mention that you're using `SHOWOFF_USE_NEW_SERVER=true`
+   - Mention that you're using v0.22.0+ (new architecture is default)
 
 ### Step 3: Prepare for Legacy Removal
 
-In version 0.23.0, the legacy architecture will be removed completely. To prepare:
+In version 0.24.0, the legacy architecture will be removed completely. To prepare:
 
 1. Test all your presentations with the new architecture (now the default)
 2. Update any custom templates or plugins to work with the new architecture
@@ -69,8 +69,8 @@ If the server fails to start with the new architecture:
 
 1. Check for error messages in the console
 2. Verify that your presentation directory contains a valid `showoff.json` file
-3. Try running with verbose mode: `SHOWOFF_USE_NEW_SERVER=true showoff serve -v`
-4. If needed, fall back to legacy mode temporarily
+3. Try running with verbose mode: `showoff serve -v`
+4. If needed, fall back to legacy mode temporarily: `SHOWOFF_USE_LEGACY_SERVER=true showoff serve`
 
 ### WebSocket Issues
 
@@ -87,10 +87,10 @@ If you're using SSL and encounter issues:
 
 ```bash
 # With certificate and key files
-SHOWOFF_USE_NEW_SERVER=true showoff serve -s --ssl_certificate=cert.pem --ssl_private_key=key.pem
+showoff serve -s --ssl_certificate=cert.pem --ssl_private_key=key.pem
 
 # With auto-generated certificates (development only)
-SHOWOFF_USE_NEW_SERVER=true showoff serve -s
+showoff serve -s
 ```
 
 ## Temporary Rollback
@@ -101,7 +101,7 @@ If you encounter issues with the new architecture:
 SHOWOFF_USE_LEGACY_SERVER=true showoff serve
 ```
 
-Note: The legacy server will display deprecation warnings and will be removed in v0.23.0.
+Note: The legacy server will display deprecation warnings and will be removed in v0.24.0.
 
 ## Benefits of the New Architecture
 

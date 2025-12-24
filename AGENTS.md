@@ -49,11 +49,11 @@ rake spec                     # Run RSpec tests
 
 ## Architecture Notes
 
-1. **Dual Codebase (Active Refactor - started v0.20.2):**
-   - `showoff.rb` = Monolithic god class. Routes, markdown, websockets, forms, stats inline.
+1. **Dual Codebase (Active Refactor - Phase 5b):**
+   - `showoff.rb` = Monolithic god class (DEPRECATED). Routes, markdown, websockets, forms, stats inline.
    - `showoff_ng.rb` = Clean orchestrator delegating to modular `Showoff::*` classes.
-   - `serve` command not yet ported to showoff_ng.
-   - **All tests use showoff_ng. New code should follow showoff_ng patterns.**
+   - `serve` command now uses new architecture by default.
+   - **Legacy code will be removed in v0.23.0. All new code must follow showoff_ng patterns.**
 
 2. **Compilation Pipeline (showoff_ng):**
    Markdown → Variables → i18n → Tilt → Nokogiri DOM → Forms → Fixups → Glossary → Downloads → Notes

@@ -405,15 +405,13 @@ end
     begin
       # Only show detailed stats to localhost/presenter
       if localhost?
-        # TODO: The legacy @@counter['pageviews'] structure needs to be
-        # implemented in StatsManager. For now, using empty hash.
-        @counter = {}
+        # Use StatsManager's legacy_counter method to get pageviews data
+        @counter = stats.legacy_counter
       else
         @counter = nil
       end
 
-      # Calculate total elapsed time per slide
-      # TODO: This calculation should be moved into StatsManager
+      # Get total elapsed time per slide from StatsManager
       @all = stats.elapsed_time_per_slide rescue {}
 
       # Set variables needed by header_mini.erb
@@ -707,8 +705,10 @@ end
       logger.info "Generating slides for locale: #{@locale}" if respond_to?(:logger) && logger
 
       # If we're displaying from a repository, update it
-      # TODO: Implement repository update in the new architecture
-      # ShowoffUtils.update(settings.verbose) if settings.url
+      if settings.respond_to?(:url) && settings.url
+        logger.info "Updating presentation repository..." if respond_to?(:logger) && logger
+        system('git', 'pull')
+      end
 
       # In the future, this would call a method to generate slides
       # For now, we'll return a placeholder that can be expanded later

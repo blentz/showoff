@@ -24,16 +24,16 @@ The new architecture provides:
 
 ## Migration Guide
 
-### Step 1: Test with Feature Flag
+### Step 1: Test with Both Architectures
 
-To test your presentations with the new server architecture:
+To test your presentations with both server architectures:
 
 ```bash
-# Run with new architecture
-SHOWOFF_USE_NEW_SERVER=true showoff serve
-
-# Run with legacy architecture (default)
+# Run with new architecture (default)
 showoff serve
+
+# Run with legacy architecture (deprecated)
+SHOWOFF_USE_LEGACY_SERVER=true showoff serve
 ```
 
 Compare the behavior between the two modes. The new architecture should be 100% compatible with existing presentations.
@@ -49,13 +49,14 @@ If you encounter any issues with the new architecture:
    - Include any error messages from the console
    - Mention that you're using `SHOWOFF_USE_NEW_SERVER=true`
 
-### Step 3: Prepare for Default Switch
+### Step 3: Prepare for Legacy Removal
 
-In version 0.22.0 (approximately 3 months from now), the new architecture will become the default. To prepare:
+In version 0.23.0, the legacy architecture will be removed completely. To prepare:
 
-1. Test all your presentations with the new architecture
-2. Update any custom templates or plugins to work with both architectures
-3. If you need to continue using the legacy architecture, you'll be able to use:
+1. Test all your presentations with the new architecture (now the default)
+2. Update any custom templates or plugins to work with the new architecture
+3. If you encounter issues, please report them promptly
+4. The legacy architecture can still be used temporarily with:
    ```bash
    SHOWOFF_USE_LEGACY_SERVER=true showoff serve
    ```
@@ -92,14 +93,15 @@ SHOWOFF_USE_NEW_SERVER=true showoff serve -s --ssl_certificate=cert.pem --ssl_pr
 SHOWOFF_USE_NEW_SERVER=true showoff serve -s
 ```
 
-## Rollback
+## Temporary Rollback
 
-If you encounter issues:
+If you encounter issues with the new architecture:
 ```bash
-# Unset the flag
-unset SHOWOFF_USE_NEW_SERVER
-showoff serve
+# Use the legacy server temporarily
+SHOWOFF_USE_LEGACY_SERVER=true showoff serve
 ```
+
+Note: The legacy server will display deprecation warnings and will be removed in v0.23.0.
 
 ## Benefits of the New Architecture
 
@@ -111,10 +113,10 @@ showoff serve
 
 ## Timeline
 
-- **v0.21.0** (Current): Opt-in via `SHOWOFF_USE_NEW_SERVER=true`
-- **v0.22.0** (+3 months): New architecture becomes default
-- **v0.23.0** (+6 months): Legacy architecture deprecated with warnings
-- **v0.24.0** (+9 months): Legacy architecture removed
+- **v0.21.0**: Opt-in via `SHOWOFF_USE_NEW_SERVER=true`
+- **v0.22.0** (Current): New architecture as default, legacy opt-out with `SHOWOFF_USE_LEGACY_SERVER=true`
+- **v0.23.0** (+3 months): Legacy architecture removed
+- **v0.24.0** (+6 months): Compatibility shims removed
 
 ## Technical Details
 

@@ -284,26 +284,28 @@ EOS
       # Git repository handling (same for both architectures)
       if options[:url]
         ShowoffUtils.clone(options[:git_url], options[:git_branch], options[:git_path]) do
-          if use_new_server
-            # New architecture
-            Showoff::ServerAdapter.run!(options) do |server|
+          if use_legacy_server
+            # Legacy architecture
+            Showoff.run!(options) do |server|
               configure_ssl.call(server, options)
             end
           else
-            # Legacy architecture
-            Showoff.run!(options) do |server|
+            # New architecture (default)
+            Showoff::ServerAdapter.run!(options) do |server|
               configure_ssl.call(server, options)
             end
           end
         end
       else
         # Direct invocation (no git clone)
-        if use_new_server
-          Showoff::ServerAdapter.run!(options) do |server|
+        if use_legacy_server
+          # Legacy architecture
+          Showoff.run!(options) do |server|
             configure_ssl.call(server, options)
           end
         else
-          Showoff.run!(options) do |server|
+          # New architecture (default)
+          Showoff::ServerAdapter.run!(options) do |server|
             configure_ssl.call(server, options)
           end
         end
@@ -388,8 +390,14 @@ EOS
       ENV['GLI_DEBUG'] = 'true'
     end
 
-    # Feature flag for new server architecture
-    use_new_server = ENV['SHOWOFF_USE_NEW_SERVER'] == 'true' || ENV['SHOWOFF_USE_NEW_SERVER'] == '1'
+    # Feature flag for legacy server architecture
+    use_legacy_server = ENV['SHOWOFF_USE_LEGACY_SERVER'] == 'true' || ENV['SHOWOFF_USE_LEGACY_SERVER'] == '1'
+
+    # Show deprecation warning if legacy server is used
+    if use_legacy_server && command.name == :serve
+      STDERR.puts "\n\033[31mWARNING: Legacy server architecture is deprecated and will be removed in v0.23.0.\033[0m"
+      STDERR.puts "\033[31mPlease test with the new architecture and report issues.\033[0m\n\n"
+    end
 
     # Route commands to appropriate backend
     if global[:dev] || ['static', 'pdf'].include?(command.name.to_s)
@@ -398,14 +406,14 @@ EOS
       if options[:file]
         Showoff::Config.load(options[:file])
       end
-    elsif use_new_server && command.name == :serve
-      # New server architecture (opt-in via env var)
+    elsif use_legacy_server && command.name == :serve
+      # Legacy architecture (opt-out via env var)
+      require 'showoff'
+    else
+      # New architecture (default)
       require 'showoff_ng'
       require 'showoff/server'
       require 'showoff/server_adapter'
-    else
-      # Legacy architecture (default)
-      require 'showoff'
     end
 
     true

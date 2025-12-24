@@ -4,7 +4,7 @@
 
 **Showoff** - Sinatra-based slideshow presentation server. Markdown → HTML slides with live presenter mode, audience sync, code execution, PDF export.
 
-**Version:** 0.20.4
+**Version:** 0.22.0
 **Ruby:** >= 1.9 (targets 2.x)
 
 ## Tech Stack
@@ -39,11 +39,12 @@ lib/
 
 ```bash
 bundle install                # Install deps
-showoff serve                 # Run server (port 9090) - uses showoff.rb
-showoff static --dev          # Static HTML via showoff_ng
-showoff pdf --dev             # PDF via showoff_ng
+showoff serve                 # Run server (port 9090) - uses new architecture
+SHOWOFF_USE_LEGACY_SERVER=true showoff serve  # Run with legacy architecture (deprecated)
+showoff static                # Static HTML
+showoff pdf                   # PDF generation
 showoff serve -x              # Enable code execution
-rake spec                     # Run RSpec tests (uses showoff_ng)
+rake spec                     # Run RSpec tests
 ```
 
 ## Architecture Notes

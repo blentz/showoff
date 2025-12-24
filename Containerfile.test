@@ -1,0 +1,78 @@
+# Containerfile for running RSpec tests in the Showoff project
+#
+# Purpose: Run RSpec tests in an isolated container environment with all test dependencies
+#
+# Build:
+#   podman build -t showoff:test -f Containerfile.test .
+#
+# Run tests (default: unit tests for server):
+#   podman run --rm showoff:test
+#
+# Run all tests:
+#   podman run --rm showoff:test bundle exec rspec spec/ --format documentation
+#
+# Run specific test file:
+#   podman run --rm showoff:test bundle exec rspec spec/unit/showoff/server/cache_manager_spec.rb
+#
+# Run interactive shell for debugging:
+#   podman run --rm -it --entrypoint=/bin/sh showoff:test
+#
+# Key differences from production Containerfile:
+# - Installs ALL gems including development and test groups
+# - Keeps build dependencies (needed for some test gems)
+# - Default CMD runs RSpec tests instead of serving presentations
+# - Flexible entrypoint for running different test commands
+
+FROM ruby:3.2-alpine
+
+# Build dependencies for native gem extensions
+# - build-base: gcc, make, etc.
+# - cmake: required by commonmarker
+# - git: some gems may need it
+# - libxml2-dev, libxslt-dev: required by nokogiri at build time
+# - zlib-dev: compression support
+RUN apk add --no-cache --virtual .build-deps \
+        build-base \
+        cmake \
+        git \
+        libxml2-dev \
+        libxslt-dev \
+        zlib-dev
+
+# Runtime dependencies
+# - libxml2, libxslt: nokogiri runtime
+# - zlib: compression
+# - libstdc++: required by eventmachine native extension
+RUN apk add --no-cache \
+        libxml2 \
+        libxslt \
+        zlib \
+        libstdc++
+
+# Install showoff from local source
+WORKDIR /showoff
+COPY Gemfile Gemfile.lock* showoff.gemspec ./
+COPY lib/showoff/version.rb lib/showoff/version.rb
+
+# Install ALL dependencies including development and test groups
+# NOTE: This differs from production Containerfile which excludes test/dev gems
+RUN bundle install --jobs 4
+
+# Copy the rest of the application
+COPY . .
+
+# NOTE: We keep build dependencies for test environment
+# Some test gems may require native extensions or build tools
+# Production Containerfile removes these with: apk del .build-deps
+
+# Set working directory to project root for running tests
+WORKDIR /showoff
+
+# Use the locally installed showoff
+ENV PATH="/showoff/bin:${PATH}"
+
+# Flexible entrypoint - allows overriding the command easily
+ENTRYPOINT []
+
+# Default: Run all RSpec tests with documentation format
+CMD ["bundle", "exec", "rspec", "spec/", "--format", "documentation"]

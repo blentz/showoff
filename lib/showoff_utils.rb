@@ -195,17 +195,17 @@ class ShowoffUtils
   HEROKU_GEMS_FILE   = 'Gemfile'
   HEROKU_CONFIG_FILE = 'config.ru'
 
-	# Setup presentation to run on Heroku
-  #
-  # name         - String containing heroku name
-  # force        - boolean if .gems/Gemfile and config.ru should be overwritten if they don't exist
-  # password     - String containing password to protect your heroku site; nil means no password protection
-  def self.heroku(name, force = false, password = nil)
+# Setup presentation to run on Heroku
+#
+# name         - String containing heroku name
+# password     - String containing password to protect your heroku site; nil means no password protection
+# force        - boolean if .gems/Gemfile and config.ru should be overwritten if they don't exist
+def self.heroku(name, password = nil, force = false)
     modified_something = create_gems_file(HEROKU_GEMS_FILE,
                                           !password.nil?,
                                           force,
-                                          lambda{ |gem| "gem '#{gem}'" },
-                                          lambda{ "source :rubygems" })
+                                           lambda{ |gem, version=nil| version ? "gem '#{gem}', '#{version}'" : "gem '#{gem}'" },
+                                          lambda{ "source 'https://rubygems.org'" })
 
     create_file_if_needed(HEROKU_PROCFILE,force) do |file|
       modified_something = true
@@ -627,7 +627,7 @@ class ShowoffUtils
     EXTENSIONS[ext] || ext
   end
 
-  REQUIRED_GEMS = %w(redcarpet showoff sinatra-websocket thin heroku)
+  REQUIRED_GEMS = %w(redcarpet showoff sinatra-websocket thin)
 
   # Creates the file that lists the gems for heroku
   #
@@ -646,7 +646,7 @@ class ShowoffUtils
       file.puts "# Using new modular architecture"
 
       # Format showoff gem with version constraint
-      file.puts formatter.call("showoff '~> #{SHOWOFF_VERSION}'")
+      file.puts formatter.call('showoff', "~> #{SHOWOFF_VERSION}")
 
       # Add other required gems
       (REQUIRED_GEMS - ['showoff']).each { |gem| file.puts formatter.call(gem) }

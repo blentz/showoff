@@ -38,13 +38,43 @@ class Showoff::Config
   end
 
   def self.load(path = 'showoff.json')
-    raise 'Presentation file does not exist at the specified path' unless File.exist? path
+    begin
+      # Check if file exists
+      unless File.exist?(path)
+        Showoff::Logger.warn "Presentation file does not exist at #{path}. Using minimal defaults."
+        @@root = File.dirname(path)
+        @@config = {}
+        @@sections = {'.': ['.']}
+        self.load_defaults!
+        return
+      end
 
-    @@root     = File.dirname(path)
-    @@config   = JSON.parse(File.read(path))
-    @@sections = self.expand_sections
+      # Try to parse the JSON file
+      @@root = File.dirname(path)
+      begin
+        @@config = JSON.parse(File.read(path))
+      rescue JSON::ParserError => e
+        Showoff::Logger.error "Invalid JSON in presentation file: #{path}"
+        Showoff::Logger.error e.message
+        @@config = {}
+      end
 
-    self.load_defaults!
+      # Ensure config is a hash
+      @@config = {} unless @@config.is_a?(Hash)
+
+      # Expand sections and load defaults
+      @@sections = self.expand_sections
+      self.load_defaults!
+    rescue => e
+      Showoff::Logger.error "Error loading presentation file: #{e.message}"
+      Showoff::Logger.debug e.backtrace
+
+      # Set minimal defaults
+      @@root = File.dirname(path)
+      @@config = {}
+      @@sections = {'.': ['.']}
+      self.load_defaults!
+    end
   end
 
   # Expand and normalize all the different variations that the sections structure
@@ -64,7 +94,15 @@ class Showoff::Config
     begin
       if @@config.is_a?(Hash)
         # dup so we don't overwrite the original data structure and make it impossible to re-localize
-        sections = @@config['sections'].dup
+        sections = @@config['sections']
+
+        # Handle missing sections key gracefully
+        if sections.nil?
+          Showoff::Logger.warn "No 'sections' key found in config. Using current directory."
+          sections = ['.']
+        else
+          sections = sections.dup
+        end
       else
         sections = @@config.dup
       end
@@ -92,7 +130,8 @@ class Showoff::Config
       Showoff::Logger.error "There was a problem with the presentation file #{index}"
       Showoff::Logger.error e.message
       Showoff::Logger.debug e.backtrace
-      sections = {}
+      # Default to current directory if sections can't be parsed
+      sections = {'.': ['.']}
     end
 
     sections
@@ -166,6 +205,15 @@ class Showoff::Config
   end
 
   def self.load_defaults!
+    # Ensure config is a hash
+    @@config = {} unless @@config.is_a?(Hash)
+
+    # Set default name if missing
+    @@config['name'] ||= 'Untitled Presentation'
+
+    # Ensure sections exists (will be expanded in expand_sections)
+    @@config['sections'] ||= ['.']
+
     # use a symbol which cannot clash with a string key loaded from json
     @@config['markdown'] ||= :default
     renderer = @@config['markdown']
@@ -210,9 +258,12 @@ class Showoff::Config
       :print_media_type => true,
       :quiet            => false}
     pdf_options = @@config['pdf_options'] || {}
-    pdf_options = Hash[pdf_options.map {|k, v| [k.to_sym, v]}]
+    pdf_options = Hash[pdf_options.map {|k, v| [k.to_sym, v]}] if pdf_options.is_a?(Hash)
 
     @@config['pdf_options'] = pdf_defaults.merge!(pdf_options)
+
+    # Set other defaults
+    @@config['favicon'] ||= 'favicon.ico'
   end
 
 end

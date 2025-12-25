@@ -12,23 +12,46 @@ class Showoff
   GEMROOT = File.expand_path(File.join(File.dirname(__FILE__), '..'))
 
   def self.do_static(args, options)
-    Showoff::State.set(:format, args[0] || 'web')
-    Showoff::State.set(:supplemental, args[1]) if args[0] == 'supplemental'
+    begin
+      Showoff::State.set(:format, args[0] || 'web')
+      Showoff::State.set(:supplemental, args[1]) if args[0] == 'supplemental'
 
-    Showoff::Locale.setContentLocale(options[:language])
-    presentation = Showoff::Presentation.new(options)
+      # Safely set content locale
+      begin
+        Showoff::Locale.setContentLocale(options[:language])
+      rescue => e
+        Showoff::Logger.warn "Error setting locale: #{e.message}. Using default."
+      end
 
-    makeSnapshot(presentation)
+      # Create presentation with error handling
+      begin
+        presentation = Showoff::Presentation.new(options)
+      rescue => e
+        Showoff::Logger.error "Error creating presentation: #{e.message}"
+        Showoff::Logger.error "Ensure your showoff.json is valid and contains required fields."
+        Showoff::Logger.debug e.backtrace
+        exit 1
+      end
 
-    generatePDF if Showoff::State.get(:format) == 'pdf'
+      # Make snapshot with error handling
+      begin
+        makeSnapshot(presentation)
+      rescue => e
+        Showoff::Logger.error "Error generating static snapshot: #{e.message}"
+        Showoff::Logger.debug e.backtrace
+        exit 1
+      end
 
-#     puts '------------------'
-#     presentation.sections.each do |section|
-#       puts section.name
-#       section.slides.each do |slide|
-#         puts "  - #{slide.name}"
-#       end
-#     end
+      # Generate PDF if requested
+      generatePDF if Showoff::State.get(:format) == 'pdf'
+
+    rescue => e
+      Showoff::Logger.error "Error generating static site: #{e.message}"
+      Showoff::Logger.error "Ensure showoff.json exists and is valid"
+      Showoff::Logger.error "Run 'showoff validate' to check your presentation"
+      Showoff::Logger.debug e.backtrace
+      exit 1
+    end
   end
 
   # Generate a static HTML snapshot of the presentation in the `static` directory.
@@ -38,27 +61,54 @@ class Showoff
   # @see
   #     https://github.com/puppetlabs/showoff/blob/220d6eef4c5942eda625dd6edc5370c7490eced7/lib/showoff.rb#L1506-L1574
   def self.makeSnapshot(presentation)
-    FileUtils.mkdir_p 'static'
-    File.write(File.join('static', 'index.html'), presentation.static)
+    begin
+      # Create static directory
+      FileUtils.mkdir_p 'static'
 
-    ['js', 'css'].each { |dir|
-      src  = File.join(GEMROOT, 'public', dir)
-      dest = File.join('static', dir)
-
-      FileUtils.copy_entry(src, dest, false, false, true)
-    }
-
-    # now copy all the files we care about
-    presentation.assets.each do |path|
-      src  = File.join(Showoff::Config.root, path)
-      dest = File.join('static', path)
-
-      FileUtils.mkdir_p(File.dirname(dest))
+      # Generate static HTML
       begin
-        FileUtils.copy(src, dest)
-      rescue Errno::ENOENT => e
-        Showoff::Logger.warn "Missing source file: #{path}"
+        static_html = presentation.static
+        File.write(File.join('static', 'index.html'), static_html)
+      rescue => e
+        Showoff::Logger.error "Error generating static HTML: #{e.message}"
+        raise
       end
+
+      # Copy JS and CSS directories
+      ['js', 'css'].each { |dir|
+        src  = File.join(GEMROOT, 'public', dir)
+        dest = File.join('static', dir)
+
+        begin
+          FileUtils.copy_entry(src, dest, false, false, true)
+        rescue => e
+          Showoff::Logger.error "Error copying #{dir} directory: #{e.message}"
+          raise
+        end
+      }
+
+      # Copy assets
+      begin
+        assets = presentation.assets rescue []
+        assets.each do |path|
+          src  = File.join(Showoff::Config.root, path)
+          dest = File.join('static', path)
+
+          FileUtils.mkdir_p(File.dirname(dest))
+          begin
+            FileUtils.copy(src, dest)
+          rescue Errno::ENOENT => e
+            Showoff::Logger.warn "Missing source file: #{path}"
+          end
+        end
+      rescue => e
+        Showoff::Logger.error "Error copying assets: #{e.message}"
+        # Continue even if assets fail - the HTML might still be useful
+      end
+
+    rescue => e
+      Showoff::Logger.error "Failed to create static snapshot: #{e.message}"
+      raise
     end
   end
 
@@ -75,11 +125,29 @@ class Showoff
   def self.generatePDF
     begin
       require 'pdfkit'
-      output = Showoff::Config.get('name')+'.pdf'
 
-      kit = PDFKit.new(File.new('static/index.html'), Showoff::Config.get('pdf_options'))
+      # Get name with fallback
+      name = Showoff::Config.get('name') || 'Untitled Presentation'
+      output = "#{name}.pdf"
+
+      # Get PDF options with fallback
+      pdf_options = Showoff::Config.get('pdf_options')
+      if pdf_options.nil?
+        Showoff::Logger.warn "No pdf_options found in config. Using defaults."
+        pdf_options = {
+          :page_size        => 'Letter',
+          :orientation      => 'Portrait',
+          :print_media_type => true,
+          :quiet            => false
+        }
+      end
+
+      # Generate PDF
+      kit = PDFKit.new(File.new('static/index.html'), pdf_options)
       kit.to_file(output)
       FileUtils.rm_rf('static')
+
+      Showoff::Logger.info "PDF generated successfully: #{output}"
 
     rescue RuntimeError => e
       if File.exist? output
@@ -92,8 +160,10 @@ class Showoff
       end
     rescue LoadError
       Showoff::Logger.error 'Generating a PDF version of your presentation requires the `pdfkit` gem.'
+    rescue => e
+      Showoff::Logger.error "Error generating PDF: #{e.message}"
+      Showoff::Logger.debug e.backtrace
     end
-
   end
 
 end

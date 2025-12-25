@@ -5,7 +5,7 @@ describe Showoff::Server::ExecutionManager do
   let(:logger) { double('Logger').as_null_object }
   let(:options) do
     {
-      pres_dir: File.join(File.dirname(__FILE__), '..', '..', '..', 'fixtures', 'simple'),
+      pres_dir: File.join(File.dirname(__FILE__), '..', '..', '..', 'fixtures', 'slides'),
       timeout: 5,
       parsers: {
         'ruby' => 'ruby',

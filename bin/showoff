@@ -421,20 +421,49 @@ EOS
         end
       end
 
-      # Start the server
-      if options[:url]
-        # Git repository handling
-        ShowoffUtils.clone(options[:git_url], options[:git_branch], options[:git_path]) do
-          Showoff::ServerAdapter.run!(options) do |server|
-            configure_ssl.call(server, options)
+        # Normalize options (similar to what ServerAdapter did)
+        normalized_options = {
+          pres_dir: options[:pres_dir] || '.',
+          pres_file: options[:f] || options[:file] || options[:pres_file] || 'showoff.json',
+          verbose: options[:v] || options[:verbose] || false,
+          execute: options[:x] || options[:execute] || options[:executecode] || false,
+          review: options[:r] || options[:review] || false,
+          standalone: options[:S] || options[:standalone] || false,
+          nocache: options[:nocache] || false,
+          host: options[:h] || options[:host] || options[:bind] || 'localhost',
+          port: options[:p] || options[:port] || 9090
+        }
+
+        # Start the server
+        if options[:url]
+          # Git repository handling
+          ShowoffUtils.clone(options[:git_url], options[:git_branch], options[:git_path]) do
+            # Create server instance directly
+            server = Showoff::Server.new(normalized_options)
+
+            # Configure SSL if needed
+            if options[:ssl]
+              server.class.set :ssl, true
+              server.class.set :ssl_options, ssl_options
+            end
+
+            # Run the server
+            server.run!
           end
+        else
+          # Direct invocation
+          # Create server instance directly
+          server = Showoff::Server.new(normalized_options)
+
+          # Configure SSL if needed
+          if options[:ssl]
+            server.class.set :ssl, true
+            server.class.set :ssl_options, ssl_options
+          end
+
+          # Run the server
+          server.run!
         end
-      else
-        # Direct invocation
-        Showoff::ServerAdapter.run!(options) do |server|
-          configure_ssl.call(server, options)
-        end
-      end
 
     end
   end
@@ -525,7 +554,6 @@ EOS
     when 'serve'
       require 'showoff_ng'
       require 'showoff/server'
-      require 'showoff/server_adapter'
     when 'info', 'validate'
       require 'showoff_ng'
       require 'showoff_utils'

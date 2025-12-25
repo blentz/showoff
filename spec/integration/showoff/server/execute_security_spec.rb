@@ -7,7 +7,7 @@ describe 'Showoff::Server execute route security' do
 
   let(:app) do
     Showoff::Server.new(
-      pres_dir: File.join(File.dirname(__FILE__), '..', '..', '..', 'fixtures', 'simple'),
+      pres_dir: File.join(File.dirname(__FILE__), '..', '..', '..', 'fixtures', 'slides'),
       execute: true,
       verbose: false
     )

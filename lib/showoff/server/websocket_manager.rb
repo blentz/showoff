@@ -528,28 +528,28 @@ class Showoff
            settings = Sinatra::Application.settings rescue nil
 
            # For tests that don't properly mock Sinatra::Application.settings
-           if settings.nil?
-             # Legacy fallback for tests
-             filename = "stats/feedback.json"
-             slide = control['slide']
-             rating = control['rating']
-             feedback = control['feedback']
+            unless settings && (settings.respond_to?(:feedback_manager) || (settings.respond_to?(:statsdir) && settings.respond_to?(:feedback)))
+              # Legacy fallback for tests
+              filename = "stats/feedback.json"
+              slide = control['slide']
+              rating = control['rating']
+              feedback = control['feedback']
 
-             begin
-               log = File.exist?(filename) ? JSON.parse(File.read(filename)) : {}
-             rescue JSON::ParserError
-               log = {}
-             end
+              begin
+                log = File.exist?(filename) ? JSON.parse(File.read(filename)) : {}
+              rescue JSON::ParserError
+                log = {}
+              end
 
-             log[slide] ||= []
-             log[slide] << { rating: rating, feedback: feedback }
+              log[slide] ||= []
+              log[slide] << { rating: rating, feedback: feedback }
 
-             File.write(filename, log.to_json)
-             return
-           end
+              File.write(filename, log.to_json)
+              return
+            end
 
-           # Get feedback manager instance
-           feedback_manager = settings.respond_to?(:feedback_manager) ? settings.feedback_manager : Showoff::Server::FeedbackManager.new("#{settings.statsdir}/#{settings.feedback}")
+            # Get feedback manager instance
+            feedback_manager = settings.respond_to?(:feedback_manager) ? settings.feedback_manager : Showoff::Server::FeedbackManager.new("#{settings.statsdir}/#{settings.feedback}")
 
            # Extract data from message
            slide = control['slide']

@@ -7,7 +7,7 @@ describe 'Showoff::Server execute route' do
 
   let(:app) do
     Showoff::Server.new(
-      pres_dir: File.join(File.dirname(__FILE__), '..', '..', '..', 'fixtures', 'simple'),
+          pres_dir: File.join(File.dirname(__FILE__), '..', '..', '..', 'fixtures', 'slides'),
       execute: true,
       verbose: false
     )
@@ -43,7 +43,7 @@ describe 'Showoff::Server execute route' do
     context 'when code execution is disabled' do
       let(:app) do
         Showoff::Server.new(
-          pres_dir: File.join(File.dirname(__FILE__), '..', '..', '..', 'fixtures', 'simple'),
+      pres_dir: File.join(File.dirname(__FILE__), '..', '..', '..', 'fixtures', 'slides'),
           execute: false,
           verbose: false
         )

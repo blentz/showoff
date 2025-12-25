@@ -438,31 +438,49 @@ EOS
         if options[:url]
           # Git repository handling
           ShowoffUtils.clone(options[:git_url], options[:git_branch], options[:git_path]) do
-            # Create server instance directly
-            server = Showoff::Server.new(normalized_options)
+            # Set options on the class
+            Showoff::Server.set :pres_dir, normalized_options[:pres_dir]
+            Showoff::Server.set :pres_file, normalized_options[:pres_file]
+            Showoff::Server.set :verbose, normalized_options[:verbose]
+            Showoff::Server.set :execute, normalized_options[:execute]
+            Showoff::Server.set :review, normalized_options[:review]
+            Showoff::Server.set :standalone, normalized_options[:standalone]
+            Showoff::Server.set :nocache, normalized_options[:nocache]
 
             # Configure SSL if needed
             if options[:ssl]
-              server.class.set :ssl, true
-              server.class.set :ssl_options, ssl_options
+              Showoff::Server.set :ssl, true
+              Showoff::Server.set :ssl_options, ssl_options
             end
 
-            # Run the server
-            server.run!
+            # Run the server using class method
+            Showoff::Server.run!(
+              host: normalized_options[:host],
+              port: normalized_options[:port].to_i
+            )
           end
         else
           # Direct invocation
-          # Create server instance directly
-          server = Showoff::Server.new(normalized_options)
+          # Set options on the class
+          Showoff::Server.set :pres_dir, normalized_options[:pres_dir]
+          Showoff::Server.set :pres_file, normalized_options[:pres_file]
+          Showoff::Server.set :verbose, normalized_options[:verbose]
+          Showoff::Server.set :execute, normalized_options[:execute]
+          Showoff::Server.set :review, normalized_options[:review]
+          Showoff::Server.set :standalone, normalized_options[:standalone]
+          Showoff::Server.set :nocache, normalized_options[:nocache]
 
           # Configure SSL if needed
           if options[:ssl]
-            server.class.set :ssl, true
-            server.class.set :ssl_options, ssl_options
+            Showoff::Server.set :ssl, true
+            Showoff::Server.set :ssl_options, ssl_options
           end
 
-          # Run the server
-          server.run!
+          # Run the server using class method
+          Showoff::Server.run!(
+            host: normalized_options[:host],
+            port: normalized_options[:port].to_i
+          )
         end
 
     end

@@ -816,9 +816,14 @@ end
     end
   end
 
-  # Instance-level run! for compatibility with ServerAdapter
-  def run!
-    # Defer to Sinatra::Base class method
-    self.class.run!
-  end
+# Instance-level run! for compatibility with ServerAdapter
+def run!(options = {})
+  # Use Rack directly to run the server
+  require 'rack'
+  handler = Rack::Handler.pick(['thin'])
+  handler.run(self,
+    Host: @options[:host] || 'localhost',
+    Port: (@options[:port] || 9090).to_i
+  )
+end
 end

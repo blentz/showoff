@@ -17,4 +17,8 @@ group :test do
   gem 'pry'
 end
 
+group :development, :test do
+  gem 'bundler-audit', require: false
+end
+
 gem 'rack-contrib'

@@ -114,3 +114,15 @@ Additional documentation:
 ## Contributing
 
 See the [CONTRIB.md](CONTRIB.md) file for how to contribute to this project
+
+## Security
+
+Run security audit:
+```bash
+bundle exec bundler-audit check
+```
+
+Or use the script:
+```bash
+./script/security_audit.sh
+```

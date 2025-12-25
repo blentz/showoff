@@ -138,3 +138,10 @@ rescue LoadError
   puts "'gem install mg' to get helper gem publishing tasks. (optional)"
 end
 
+# Security audit task
+begin
+  require 'bundler/audit/task'
+  Bundler::Audit::Task.new
+rescue LoadError
+  # bundler-audit not available
+end

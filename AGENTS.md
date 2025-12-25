@@ -97,3 +97,8 @@ The modular architecture provides clean separation of concerns:
 - Section = directory, file, array, or external JSON include
 - CSS classes control behavior: `bullets`, `incremental`, `commandline`, `execute`, `form=name`
 - i18n: UI in `locales/*.yml`, content in `locales/<lang>/` subdirs
+
+## Security Scanning
+- bundler-audit: Checks for vulnerable gem dependencies
+- Run: `bundle exec bundler-audit check`
+- Update database: `bundle exec bundler-audit update`

@@ -58,6 +58,9 @@ COPY lib/showoff/version.rb lib/showoff/version.rb
 # NOTE: This differs from production Containerfile which excludes test/dev gems
 RUN bundle install --jobs 4
 
+# Update vulnerability database (optional)
+RUN bundle exec bundler-audit update || true
+
 # Copy the rest of the application
 COPY . .
 

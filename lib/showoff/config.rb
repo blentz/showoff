@@ -1,9 +1,14 @@
 require 'json'
 
 class Showoff::Config
+  # Initialize class variables to prevent nil errors
+  @@config ||= {}
+  @@sections ||= {'.': ['.']}
+  @@root ||= Dir.pwd
+  @@loaded = false
 
   def self.keys
-    @@config.keys
+    (@@config || {}).keys
   end
 
   # Retrieve settings from the config hash.
@@ -12,11 +17,16 @@ class Showoff::Config
   #
   # Returns the data type & value requested, nil on error.
   def self.get(*setting)
-    @@config.dig(*setting) rescue nil
+    (@@config || {}).dig(*setting) rescue nil
   end
 
   def self.sections
-    @@sections
+    @@sections || {'.': ['.']}
+  end
+
+  # Check if config has been loaded
+  def self.loaded?
+    @@loaded
   end
 
   # Absolute root of presentation
@@ -46,6 +56,7 @@ class Showoff::Config
         @@config = {}
         @@sections = {'.': ['.']}
         self.load_defaults!
+        @@loaded = true
         return
       end
 
@@ -65,6 +76,7 @@ class Showoff::Config
       # Expand sections and load defaults
       @@sections = self.expand_sections
       self.load_defaults!
+      @@loaded = true
     rescue => e
       Showoff::Logger.error "Error loading presentation file: #{e.message}"
       Showoff::Logger.debug e.backtrace
@@ -74,6 +86,7 @@ class Showoff::Config
       @@config = {}
       @@sections = {'.': ['.']}
       self.load_defaults!
+      @@loaded = true
     end
   end
 
@@ -92,6 +105,9 @@ class Showoff::Config
   #  https://github.com/puppetlabs/showoff/blob/3f43754c84f97be4284bb34f9bc7c42175d45226/lib/showoff_utils.rb#L427-L475
   def self.expand_sections
     begin
+      # Ensure @@config exists
+      @@config ||= {}
+
       if @@config.is_a?(Hash)
         # dup so we don't overwrite the original data structure and make it impossible to re-localize
         sections = @@config['sections']

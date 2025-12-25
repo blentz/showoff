@@ -263,9 +263,9 @@ module Wrapper
   end
 
   desc 'Serves the showoff presentation in the current directory'
-  desc 'Setup your presentation to serve on Heroku'
+  desc 'Generate Heroku deployment files'
   arg_name 'heroku_name'
-  long_desc 'Creates the configuration files needed to Herokuize a Showoff presentation and then deploys it for you.'
+  long_desc 'Creates the configuration files needed for Heroku deployment. This command only generates files and does not require the heroku CLI or network access.'
   command :heroku do |c|
 
     c.desc 'add password protection to your heroku site'
@@ -278,32 +278,27 @@ module Wrapper
       raise "heroku_name is required" if args.empty?
       raise "Name must start with a letter and can only contain lowercase letters, numbers, and dashes." unless args.first =~ /^[a-z][a-z1-9-]*$/
 
-      unless system('git remote get-url heroku')
-        ShowoffUtils.command("heroku create #{args[0]}", "Please ensure that the heroku gem is installed and you're logged in.")
-      end
-
-      if ShowoffUtils.heroku(args[0],options[:f],options[:p])
-        ShowoffUtils.command('bundle install', 'Please ensure that the bundler gem is installed.')
-
-        begin
-          ShowoffUtils.command('git add Procfile Gemfile Gemfile.lock config.ru')
-          ShowoffUtils.command('git commit -m "Herokuized by Showoff"')
-          ShowoffUtils.command('git push heroku master')
-        rescue => e
-          puts 'Git operations failed. Please correct issues, then manually commit the following files:'
-          puts ' * Procfile'
-          puts ' * Gemfile'
-          puts ' * Gemfile.lock'
-          puts ' * config.ru'
-          puts
-          puts 'When done, please run "git push heroku master"'
-        end
-
+      # Generate the files
+      if ShowoffUtils.heroku(args[0], options[:p], options[:f])
+        puts "Heroku configuration files generated:"
+        puts " * Procfile"
+        puts " * Gemfile"
+        puts " * config.ru"
+        puts
+        puts "To deploy to Heroku:"
+        puts "  1. Install the Heroku CLI if not already installed"
+        puts "  2. Login with 'heroku login'"
+        puts "  3. Initialize git if needed: 'git init'"
+        puts "  4. Create Heroku app: 'heroku create #{args[0]}'"
+        puts "  5. Add files: 'git add Procfile Gemfile config.ru'"
+        puts "  6. Commit files: 'git commit -m \"Heroku configuration\"'"
+        puts "  7. Deploy: 'git push heroku main'"
+        puts
         if options[:p]
-          puts "CAREFUL: you are commiting your access password - anyone with read access to the repo can access the preso\n\n"
+          puts "CAREFUL: you are including your access password in config.ru"
+          puts "Anyone with read access to the repo can access the presentation"
+          puts
         end
-
-        puts 'Your presentation has been Herokuized. Run `heroku open` to see it.'
       end
     end
   end

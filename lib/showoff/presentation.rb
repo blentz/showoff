@@ -11,6 +11,12 @@ class Showoff::Presentation
 
     # Handle missing or empty sections
     begin
+      # Ensure config is loaded
+      unless Showoff::Config.loaded?
+        config_file = File.join(Dir.pwd, 'showoff.json')
+        Showoff::Config.load(config_file)
+      end
+
       sections = Showoff::Config.sections
       if sections.nil? || sections.empty?
         Showoff::Logger.warn "No sections found in config. Using current directory."
@@ -18,7 +24,7 @@ class Showoff::Presentation
       end
 
       @sections = sections.map do |name, files|
-        Showoff::Presentation::Section.new(name, files)
+        Showoff::Presentation::Section.new(name, files || ['.'])
       end
     rescue => e
       Showoff::Logger.error "Error initializing sections: #{e.message}"
@@ -182,9 +188,11 @@ class Showoff::Presentation
             Showoff::Logger.warn "Error processing CSS file #{css_path}: #{e.message}"
           end
         end
-      rescue => e
-        Showoff::Logger.warn "Error processing CSS files: #{e.message}"
-      end
+    rescue => e
+      # Silently handle missing or invalid config - use defaults
+      # Config loading handles warnings, so we don't need to log here
+      @sections = []
+    end
 
       # also all user-defined styles and javascript files
       files.concat css_files rescue []

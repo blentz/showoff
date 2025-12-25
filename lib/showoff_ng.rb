@@ -23,8 +23,14 @@ class Showoff
         Showoff::Logger.warn "Error setting locale: #{e.message}. Using default."
       end
 
-      # Create presentation with error handling
+      # Ensure config is loaded before creating presentation
       begin
+        # Make sure config is loaded
+        unless Showoff::Config.loaded?
+          config_file = File.join(Dir.pwd, 'showoff.json')
+          Showoff::Config.load(config_file)
+        end
+
         presentation = Showoff::Presentation.new(options)
       rescue => e
         Showoff::Logger.error "Error creating presentation: #{e.message}"

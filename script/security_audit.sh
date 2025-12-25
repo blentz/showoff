@@ -1,10 +1,11 @@
 #!/bin/bash
-set -euo pipefail
+set -e
 
-echo "Updating vulnerability database..."
-bundle exec bundler-audit update
-
-echo "Running security audit..."
-bundle exec bundler-audit check
-
-echo "Security audit passed!"
+# Try bundle exec first, fall back to direct
+if bundle exec bundler-audit --version 2>/dev/null; then
+  bundle exec bundler-audit update
+  bundle exec bundler-audit check
+else
+  bundler-audit update
+  bundler-audit check
+fi

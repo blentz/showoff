@@ -56,10 +56,9 @@ COPY lib/showoff/version.rb lib/showoff/version.rb
 
 # Install ALL dependencies including development and test groups
 # NOTE: This differs from production Containerfile which excludes test/dev gems
-RUN bundle install --jobs 4
-
-# Update vulnerability database (optional)
-RUN bundle exec bundler-audit update || true
+RUN bundle install && \
+    gem install bundler-audit && \
+    bundler-audit update
 
 # Copy the rest of the application
 COPY . .

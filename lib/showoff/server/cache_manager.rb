@@ -21,9 +21,10 @@ class Showoff::Server::CacheManager
   def initialize(max_size: 100)
     @mutex = Mutex.new
     @max_size = max_size
-    @cache = {}  # key => {value:, accessed_at:}
+    @cache = {}  # key => {value:, accessed_seq:}
     @hits = 0
     @misses = 0
+    @access_seq = 0  # monotonically increasing access sequence to break ties
   end
 
   # Get a value from the cache.
@@ -34,7 +35,8 @@ class Showoff::Server::CacheManager
     @mutex.synchronize do
       if @cache.key?(key)
         @hits += 1
-        @cache[key][:accessed_at] = Time.now
+        @access_seq += 1
+        @cache[key][:accessed_seq] = @access_seq
         @cache[key][:value]
       else
         @misses += 1
@@ -55,9 +57,10 @@ class Showoff::Server::CacheManager
         evict_lru_unsafe
       end
 
+      @access_seq += 1
       @cache[key] = {
         value: value,
-        accessed_at: Time.now
+        accessed_seq: @access_seq
       }
 
       value
@@ -145,15 +148,17 @@ class Showoff::Server::CacheManager
         if value.nil?
           value = yield
           # Use the internal set method to avoid double-locking
+          @access_seq += 1
           @cache[key] = {
             value: value,
-            accessed_at: Time.now
+            accessed_seq: @access_seq
           }
           # Evict LRU item if at capacity
           evict_lru_unsafe if @cache.size > @max_size
         else
-          # Update access time for the key we found
-          @cache[key][:accessed_at] = Time.now
+          # Update access sequence for the key we found
+          @access_seq += 1
+          @cache[key][:accessed_seq] = @access_seq
         end
       end
     end
@@ -169,9 +174,9 @@ class Showoff::Server::CacheManager
   def evict_lru_unsafe
     return if @cache.empty?
 
-    # Find the key with the oldest accessed_at timestamp
+    # Find the key with the smallest accessed_seq (least recently used)
     # Explicitly destructure the key-value pair from min_by
-    lru_key, _lru_data = @cache.min_by { |key, data| data[:accessed_at] }
+    lru_key, _lru_data = @cache.min_by { |key, data| data[:accessed_seq] }
     @cache.delete(lru_key) if lru_key
   end
 end

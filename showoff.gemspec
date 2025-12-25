@@ -26,7 +26,9 @@ Gem::Specification.new do |s|
   s.add_dependency      "i18n",              "~> 1.8"
   s.add_dependency      "iso-639",           "~> 0.3"
   s.add_dependency      "json",              "~> 2.5"
-  s.add_dependency      "nokogiri",          "~> 1.11"
+  # Updated minimum to ensure platform builds (aarch64) and security fixes
+  # Allow latest stable without upper bound to avoid artificial pinning
+  s.add_dependency      "nokogiri",          ">= 1.13.10"
   s.add_dependency      "parslet",           "~> 2.0"
   s.add_dependency      "rack-contrib",      "~> 2.3"
   s.add_dependency      "redcarpet",         "~> 3.5"

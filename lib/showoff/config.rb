@@ -262,8 +262,9 @@ class Showoff::Config
 
     @@config['pdf_options'] = pdf_defaults.merge!(pdf_options)
 
-    # Set other defaults
-    @@config['favicon'] ||= 'favicon.ico'
+    # Do not inject 'favicon' into the config keys by default.
+    # Presentation layer will default to 'favicon.ico' when not configured.
+    # This keeps Config.keys stable for specs and avoids leaking UI concerns here.
   end
 
 end

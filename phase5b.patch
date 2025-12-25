@@ -1,0 +1,228 @@
+diff --git a/bin/showoff b/bin/showoff
+index 4a4c5c5..b7c9a5c 100755
+--- a/bin/showoff
++++ b/bin/showoff
+@@ -163,9 +163,9 @@ module Wrapper
+   long_desc <<-EOS
+ Starts a web server to display your presentation. By default, the server
+ runs on http://0.0.0.0:9090
+ 
+-To use the new server architecture (Phase 5 - EXPERIMENTAL):
+-  SHOWOFF_USE_NEW_SERVER=true showoff serve
++To use the legacy server architecture (deprecated):
++  SHOWOFF_USE_LEGACY_SERVER=true showoff serve
+ 
+ Options:
+ EOS
+@@ -265,7 +265,13 @@ Options:
+       end
+ 
+       # Determine which architecture to use
+-      use_new_server = ENV['SHOWOFF_USE_NEW_SERVER'] == 'true' || ENV['SHOWOFF_USE_NEW_SERVER'] == '1'
++      use_legacy_server = ENV['SHOWOFF_USE_LEGACY_SERVER'] == 'true' || ENV['SHOWOFF_USE_LEGACY_SERVER'] == '1'
++      
++      # Show deprecation warning if legacy server is used
++      if use_legacy_server
++        STDERR.puts "\n\033[31mWARNING: Legacy server architecture is deprecated and will be removed in v0.23.0.\033[0m"
++        STDERR.puts "\033[31mPlease test with the new architecture and report issues.\033[0m\n\n"
++      end
+ 
+       # Helper method to configure SSL
+       configure_ssl = lambda do |server, opts|
+@@ -278,14 +284,14 @@ Options:
+       # Git repository handling (same for both architectures)
+       if options[:url]
+         ShowoffUtils.clone(options[:git_url], options[:git_branch], options[:git_path]) do
+-          if use_new_server
+-            # New architecture
+-            Showoff::ServerAdapter.run!(options) do |server|
+-              configure_ssl.call(server, options)
+-            end
+-          else
++          if use_legacy_server
+             # Legacy architecture
+             Showoff.run!(options) do |server|
++              configure_ssl.call(server, options)
++            end
++          else
++            # New architecture (default)
++            Showoff::ServerAdapter.run!(options) do |server|
+               configure_ssl.call(server, options)
+             end
+           end
+@@ -293,14 +299,14 @@ Options:
+       else
+         # Direct invocation (no git clone)
+-        if use_new_server
+-          Showoff::ServerAdapter.run!(options) do |server|
+-            configure_ssl.call(server, options)
+-          end
+-        else
++        if use_legacy_server
++          # Legacy architecture
+           Showoff.run!(options) do |server|
+             configure_ssl.call(server, options)
+           end
++        else
++          # New architecture (default)
++          Showoff::ServerAdapter.run!(options) do |server|
++            configure_ssl.call(server, options)
++          end
+         end
+       end
+ 
+@@ -389,20 +395,25 @@ Options:
+     end
+ 
+     # Feature flag for new server architecture
+-    use_new_server = ENV['SHOWOFF_USE_NEW_SERVER'] == 'true' || ENV['SHOWOFF_USE_NEW_SERVER'] == '1'
++    use_legacy_server = ENV['SHOWOFF_USE_LEGACY_SERVER'] == 'true' || ENV['SHOWOFF_USE_LEGACY_SERVER'] == '1'
++    
++    # Show deprecation warning if legacy server is used
++    if use_legacy_server && command.name == :serve
++      STDERR.puts "\n\033[31mWARNING: Legacy server architecture is deprecated and will be removed in v0.23.0.\033[0m"
++      STDERR.puts "\033[31mPlease test with the new architecture and report issues.\033[0m\n\n"
++    end
+ 
+     # Route commands to appropriate backend
+     if global[:dev] || ['static', 'pdf'].include?(command.name.to_s)
+       # Static/PDF always use showoff_ng
+       require 'showoff_ng'
+       if options[:file]
+         Showoff::Config.load(options[:file])
+       end
+-    elsif use_new_server && command.name == :serve
+-      # New server architecture (opt-in via env var)
+-      require 'showoff_ng'
+-      require 'showoff/server'
+-      require 'showoff/server_adapter'
+-    else
++    elsif use_legacy_server && command.name == :serve
+       # Legacy architecture (default)
+       require 'showoff'
++    else
++      # New architecture (default)
++      require 'showoff_ng'
++      require 'showoff/server'
++      require 'showoff/server_adapter'
+     end
+ 
+     true
+diff --git a/documentation/USAGE_NEW_SERVER.md b/documentation/USAGE_NEW_SERVER.md
+index 5f7b7f1..4b908cab 100644
+--- a/documentation/USAGE_NEW_SERVER.md
++++ b/documentation/USAGE_NEW_SERVER.md
+@@ -1,11 +1,15 @@
+-# Using the New Showoff Server Architecture
++# Using the Showoff Server Architecture
+ 
+ ## Quick Start
+ 
+-Try the new architecture with your presentations:
++The new architecture is now the default:
+ 
+ ```bash
+-SHOWOFF_USE_NEW_SERVER=true showoff serve
++showoff serve
++```
++
++To use the legacy architecture (deprecated):
++
++```bash
++SHOWOFF_USE_LEGACY_SERVER=true showoff serve
+ ```
+ 
+ ## What's Different?
+@@ -18,19 +22,19 @@ The new architecture provides:
+ 
+ ## Migration Guide
+ 
+-### Step 1: Test with Feature Flag
++### Step 1: Test with Both Architectures
+ 
+-To test your presentations with the new server architecture:
++To test your presentations with both server architectures:
+ 
+ ```bash
+-# Run with new architecture
+-SHOWOFF_USE_NEW_SERVER=true showoff serve
++# Run with new architecture (default)
++showoff serve
+ 
+-# Run with legacy architecture (default)
+-showoff serve
++# Run with legacy architecture (deprecated)
++SHOWOFF_USE_LEGACY_SERVER=true showoff serve
+ ```
+ 
+-Compare the behavior between the two modes. The new architecture should be 100% compatible with existing presentations.
++Compare the behavior between the two modes. The new architecture should be 100% compatible with existing presentations.
+ 
+ ### Step 2: Report Issues
+ 
+@@ -43,15 +47,15 @@ If you encounter any issues with the new architecture:
+    - Include any error messages from the console
+    - Mention that you're using `SHOWOFF_USE_NEW_SERVER=true`
+ 
+-### Step 3: Prepare for Default Switch
++### Step 3: Prepare for Legacy Removal
+ 
+-In version 0.22.0 (approximately 3 months from now), the new architecture will become the default. To prepare:
++In version 0.23.0, the legacy architecture will be removed completely. To prepare:
+ 
+-1. Test all your presentations with the new architecture
+-2. Update any custom templates or plugins to work with both architectures
+-3. If you need to continue using the legacy architecture, you'll be able to use:
++1. Test all your presentations with the new architecture (now the default)
++2. Update any custom templates or plugins to work with the new architecture
++3. If you encounter issues, please report them promptly
++4. The legacy architecture can still be used temporarily with:
+    ```bash
+    SHOWOFF_USE_LEGACY_SERVER=true showoff serve
+    ```
+ 
+@@ -85,13 +89,14 @@ If you're using SSL and encounter issues:
+ SHOWOFF_USE_NEW_SERVER=true showoff serve -s
+ ```
+ 
+-## Rollback
++## Temporary Rollback
+ 
+-If you encounter issues:
++If you encounter issues with the new architecture:
+ ```bash
+-# Unset the flag
+-unset SHOWOFF_USE_NEW_SERVER
+-showoff serve
++# Use the legacy server temporarily
++SHOWOFF_USE_LEGACY_SERVER=true showoff serve
+ ```
+ 
++Note: The legacy server will display deprecation warnings and will be removed in v0.23.0.
++
+ ## Benefits of the New Architecture
+@@ -105,10 +110,10 @@ showoff serve
+ 
+ ## Timeline
+ 
+-- **v0.21.0** (Current): Opt-in via `SHOWOFF_USE_NEW_SERVER=true`
+-- **v0.22.0** (+3 months): New architecture becomes default
+-- **v0.23.0** (+6 months): Legacy architecture deprecated with warnings
+-- **v0.24.0** (+9 months): Legacy architecture removed
++- **v0.21.0**: Opt-in via `SHOWOFF_USE_NEW_SERVER=true`
++- **v0.22.0** (Current): New architecture is default, legacy opt-out with `SHOWOFF_USE_LEGACY_SERVER=true`
++- **v0.23.0**: Legacy architecture deprecated with warnings
++- **v0.24.0**: Legacy architecture removed
+ 
+ ## Technical Details
+ 
+diff --git a/lib/showoff/version.rb b/lib/showoff/version.rb
+index 6f3e8c0..8e0d0d3 100644
+--- a/lib/showoff/version.rb
++++ b/lib/showoff/version.rb
+@@ -1,4 +1,4 @@
+ # No namespace here since Showoff is a class and I'd have to inherit from
+ # Sinatra::Application (which we don't want to load here)
+-SHOWOFF_VERSION = '0.20.4'
++SHOWOFF_VERSION = '0.22.0'
+ 

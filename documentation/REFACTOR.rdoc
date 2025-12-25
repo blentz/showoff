@@ -1,591 +1,103 @@
-= Showoff Architecture Refactor
+= Showoff Architecture Refactor - COMPLETE
 
-This document describes the ongoing refactoring effort to replace the monolithic
-+showoff.rb+ with a modular architecture in +showoff_ng.rb+.
+This document describes the completed refactoring effort that replaced the monolithic
++showoff.rb+ with a modular architecture.
 
-== Background
+== Summary
 
-Started in v0.20.2, the refactor addresses maintainability issues with the
-original 2000+ LOC god class that mixes routing, markdown processing, websockets,
-form handling, and stats tracking in a single file.
+The refactoring project that began in v0.20.2 is now complete as of v0.24.0.
+The legacy monolithic server (+showoff.rb+, 2000+ LOC) has been removed and
+replaced with a clean, modular architecture.
 
-== Current State (Updated 2025-12-24)
+== Final Architecture
 
-=== What's Migrated
-
-The +--dev+ flag enables the new architecture for these commands:
-
-* +showoff static+ - Static HTML generation
-* +showoff static supplemental+ - Supplemental materials
-* +showoff static print+ - Print-formatted output
-* +showoff pdf+ - PDF generation via wkhtmltopdf
-
-All RSpec tests (+spec/+) run against the new architecture.
-
-*NEW (v0.20.4+):* Server infrastructure - Phase 1, 3 & 4 COMPLETE:
-* +Showoff::Server::SessionState+ - Thread-safe session management [100% coverage]
-* +Showoff::Server::StatsManager+ - Statistics tracking with JSON persistence [100% coverage]
-* +Showoff::Server::FormManager+ - Form response storage and aggregation [100% coverage]
-* +Showoff::Server::CacheManager+ - LRU cache with hit/miss tracking [100% coverage]
-* +Showoff::Server::DownloadManager+ - Downloadable file tracking [100% coverage]
-* +Showoff::Server::ActivityManager+ - Activity completion tracking [100% coverage]
-* +Showoff::Server+ - Base Sinatra::Base class with extracted routes [Integration tested]
-* Integration test suite - 33 route tests via Rack::Test [100% passing]
-* Container infrastructure - Podman test container with proper packaging [Working]
-* GET /download route - File downloads page [COMPLETE]
-
-*NEW (v0.21.0+):* Phase 5 COMPLETE:
-* +Showoff::ServerAdapter+ - Compatibility layer for CLI integration [100% functional]
-* Feature flag: +SHOWOFF_USE_NEW_SERVER+ environment variable
-* +showoff serve+ command works with new architecture when flag is enabled
-* All 507 tests passing with 0 failures
-
-*Status:* 507 examples, 0 failures, 4 pending (expected), production-ready modular architecture.
-
-=== What's Migrated
-
-The +showoff serve+ command can now use either architecture:
-* Legacy mode (default): Uses the original +showoff.rb+ monolith
-* New mode (opt-in): Uses +Showoff::Server+ via +SHOWOFF_USE_NEW_SERVER=true+
-
-== Architecture Comparison
-
-=== Legacy (+showoff.rb+)
-
-  class Showoff < Sinatra::Application
-    # 2000+ lines containing:
-    # - Sinatra settings and initialization
-    # - All HTTP routes inline
-    # - Markdown processing helpers
-    # - WebSocket handling
-    # - Form processing
-    # - Stats tracking
-    # - Authentication
-    # - Code execution
-    # - Class variables for shared state (@@forms, @@cache, @@counter, etc.)
-
-=== New (+showoff_ng.rb+)
-
-  class Showoff
-    # ~100 lines orchestrating:
-    require 'showoff/config'        # Configuration loading
-    require 'showoff/compiler'      # Markdown pipeline
-    require 'showoff/presentation'  # Presentation model
-    require 'showoff/state'         # Global state management
-    require 'showoff/locale'        # i18n handling
-    require 'showoff/logger'        # Logging wrapper
-
-== Module Inventory
-
-=== Fully Migrated
-
-[Showoff::Config]
-  Configuration loading and section expansion from +showoff.json+.
-  Replaces inline JSON parsing and +ShowoffUtils.showoff_sections+.
-
-[Showoff::State]
-  Thread-safe global state singleton. Replaces class variables like
-  +@@slide_count+, +@@section_major+, +@@section_minor+.
-
-[Showoff::Locale]
-  i18n content handling. Replaces helper methods +locale()+,
-  +get_locale_dir()+, +language_names()+, +user_translations()+.
-
-[Showoff::Logger]
-  Logging wrapper. Replaces +@logger+ instance variable.
-
-[Showoff::Presentation]
-  Presentation model with sections and slides. Generates static output.
-  Replaces +get_slides_html()+ and rendering helpers.
-
-[Showoff::Presentation::Section]
-  Section model. Loads slides from files, filters by format/supplemental.
-  Replaces section iteration in +get_slides_html()+.
-
-[Showoff::Presentation::Slide]
-  Individual slide model with metadata extraction.
-  Replaces inline +Slide+ class in helpers.
-
-[Showoff::Compiler]
-  Markdown-to-HTML compilation orchestrator.
-  Replaces +process_markdown()+ and all transformation helpers.
-
-[Showoff::Compiler::Variables]
-  Variable interpolation (+~~~CURRENT_SLIDE~~~+, +~~~CONFIG:*~~~+, etc.).
-  Replaces +process_content_for_replacements()+.
-
-[Showoff::Compiler::I18n]
-  Language-specific content selection (+~~~LANG:*~~~+ blocks).
-  Replaces +process_content_for_language()+.
-
-[Showoff::Compiler::Form]
-  Form element rendering from custom syntax.
-  Replaces +build_forms()+ and +form_element_*+ helpers.
-
-[Showoff::Compiler::Fixups]
-  DOM transformations: class application, link targets, syntax highlighting.
-  Replaces +update_p_classes()+, +update_commandline_code()+, +update_image_paths()+.
-
-[Showoff::Compiler::Notes]
-  Speaker notes extraction and personal notes injection.
-  Replaces +process_content_for_section_tags()+.
-
-[Showoff::Compiler::Glossary]
-  Glossary term collection and page generation.
-  Replaces glossary logic in +process_content_for_all_slides()+.
-
-[Showoff::Compiler::Downloads]
-  Downloadable file tracking.
-  Replaces +update_download_links()+.
-
-[Showoff::Compiler::TableOfContents]
-  TOC generation.
-  Replaces +~~~TOC~~~+ handling in +process_content_for_all_slides()+.
-
-[Showoff::Server::SessionState]
-  Thread-safe session management. Replaces class variables +@@cookie+, +@@master+.
-  Tracks presenter/audience mode, current slide position, follow-mode state.
-  95%+ test coverage with concurrency tests.
-
-[Showoff::Server::StatsManager]
-  Thread-safe statistics tracking. Replaces class variable +@@counter+.
-  Records slide views, questions, pace feedback. JSON persistence with atomic writes.
-  95%+ test coverage with 10+ concurrent thread tests.
-
-[Showoff::Server::FormManager]
-  Thread-safe form response storage. Replaces class variable +@@forms+.
-  Validates submissions, aggregates quiz results, persists to JSON atomically.
-  95%+ test coverage with concurrent submission tests.
-
-[Showoff::Server::CacheManager]
-  Thread-safe LRU cache. Replaces class variable +@@cache+.
-  Configurable max size, automatic eviction, hit/miss statistics.
-  95%+ test coverage with contention tests.
-
-=== Not Yet Migrated
-
-These components exist only in +showoff.rb+ and must be extracted:
-
-[Sinatra Application]
-  The +Sinatra::Application+ subclass with settings, middleware, and lifecycle.
-
-[HTTP Routes]
-  All route handlers:
-  * +GET /+ - Main presentation index
-  * +GET /presenter+ - Presenter view
-  * +GET /slides+ - Slide content (AJAX)
-  * +GET /onepage+, +/print+ - Print views
-  * +GET /supplemental/:content+ - Supplemental materials
-  * +GET /stats+ - Viewing statistics
-  * +GET /download+ - File downloads page
-  * +GET|POST /form/:id+ - Form submission/retrieval
-  * +GET /execute/:lang+ - Code execution
-  * +GET /edit/*+ - Local file editing
-  * +GET /image/*+, +/file/*+ - Asset serving
-  * +GET /control+ - WebSocket endpoint
-
-[WebSocket Handling]
-  Real-time communication via +sinatra-websocket+:
-  * Slide synchronization (+update+, +position+)
-  * Presenter registration (+register+)
-  * Audience tracking (+track+)
-  * Activity completion (+activity+)
-  * Pace/question feedback (+pace+, +question+, +cancel+)
-  * Quiz answer distribution (+complete+, +answerkey+)
-  * Annotations (+annotation+, +annotationConfig+)
-  * Feedback collection (+feedback+)
-
-[Statistics Tracking]
-  Pageview counting, elapsed time tracking, user agent logging.
-  Uses +@@counter+ class variable, periodic flush to disk.
-
-[Form Response Storage]
-  In-memory form response collection with disk persistence.
-  Uses +@@forms+ class variable.
-
-[Authentication]
-  Basic auth for protected/locked routes:
-  * +protected!+ - Password protection
-  * +locked!+ - Presentation key
-  * +authorized?+, +unlocked?+, +authenticate()+
-
-[Presenter Session]
-  Cookie-based presenter identification:
-  * +@@cookie+ - Presenter session token
-  * +@@master+ - Master presenter client ID
-  * +valid_presenter_cookie?+, +master_presenter?+
-
-[Code Execution]
-  Sandboxed execution of slide code blocks.
-  Uses configurable parsers per language.
-
-[Activity Tracking]
-  Completion status for activity slides.
-  Uses +@@activity+ class variable.
-
-[Cache Management]
-  Slide content caching per locale.
-  Uses +@@cache+ class variable.
-
-[Preshow]
-  Pre-presentation image rotation.
-  Uses +preshow_files+ helper.
-
-== Migration Plan
-
-=== Phase 1: Server Infrastructure (Required for +serve+) - *COMPLETE*
-
-1. *Create +Showoff::Server+ class* - *PARTIAL*
-   Extract Sinatra application setup from +showoff.rb+:
-   * Settings (views, public_folder, server, verbose, etc.) [DONE]
-   * Middleware configuration (+Rack::Locale+) [DONE]
-   * I18n initialization [DONE]
-   * Initialization logic from +initialize()+ [DONE]
-   * State manager integration [DONE]
-   * Route handlers [TODO - Phase 2]
-
-2. *Create +Showoff::Server::SessionState+ class* - *COMPLETE*
-   Extract session/auth management:
-   * Session state tracking [DONE]
-   * Presenter/audience mode [DONE]
-   * Current slide position [DONE]
-   * Follow-mode state [DONE]
-   * Presenter cookie/master tracking [DONE]
-   * Thread-safe Mutex implementation [DONE]
-   * 95%+ test coverage [DONE]
-
-3. *Create +Showoff::Server::StatsManager+ class* - *COMPLETE*
-   Extract statistics tracking:
-   * Slide view recording [DONE]
-   * Question submissions [DONE]
-   * Pace feedback [DONE]
-   * JSON persistence (atomic writes) [DONE]
-   * Most/least viewed aggregation [DONE]
-   * Thread-safe Mutex implementation [DONE]
-   * 95%+ test coverage [DONE]
-
-4. *Create +Showoff::Server::FormManager+ class* - *COMPLETE*
-   Extract form handling:
-   * Response storage [DONE]
-   * Submission validation [DONE]
-   * Aggregation for quizzes/surveys [DONE]
-   * JSON persistence (atomic writes) [DONE]
-   * Thread-safe Mutex implementation [DONE]
-   * 95%+ test coverage [DONE]
-
-5. *Create +Showoff::Server::CacheManager+ class* - *COMPLETE*
-   Extract caching:
-   * LRU cache implementation [DONE]
-   * Configurable max size [DONE]
-   * Hit/miss statistics [DONE]
-   * Automatic eviction [DONE]
-   * fetch() with block support [DONE]
-   * Thread-safe Mutex implementation [DONE]
-   * 95%+ test coverage [DONE]
-
-*Status:* Phase 1 complete - 903 LOC implementation, 1071 LOC tests, 100% coverage.
-*Files created:* 5 implementation files, 5 test files (79 test cases)
-*Documentation:* 7 architecture documents (see below)
-
-=== Phase 2: Route Handlers - *SKIPPED* (merged into Phase 3)
-
-=== Phase 3: Route Extraction & Testing - *COMPLETE*
-
-1. *Extract core routes to +Showoff::Server+ class* - *COMPLETE*
-   * +POST /form/:id+ - Form submission with validation [DONE]
-   * +GET /form/:id+ - Form aggregate retrieval with JSON [DONE]
-   * +GET /stats+ - Statistics viewing with template [DONE]
-   * +GET /health+ - Health check endpoint [DONE]
-   * +GET /+ - Index route with full template support [DONE]
-   * +GET /image/*+, +/file/*+ - Asset serving with security [DONE]
-   * +GET /edit/*+ - Local file editing (localhost only) [DONE]
-
-2. *Create integration test suite* - *COMPLETE*
-   * +spec/integration/showoff/server/routes_spec.rb+ - 14 route tests [DONE]
-   * Rack::Test integration for HTTP testing [DONE]
-   * Fixture-based testing with real presentations [DONE]
-   * All tests passing (14/14) [DONE]
-
-3. *Container infrastructure* - *COMPLETE*
-   * +Containerfile.test+ - Test-enabled Podman container [DONE]
-   * Fixed Gemfile.lock platform issues (ruby, x86_64-linux, aarch64-linux) [DONE]
-   * Clean container builds without workarounds [DONE]
-   * 229/229 tests passing in container [DONE]
-
-4. *Bug fixes and improvements* - *COMPLETE*
-   * Fixed 15+ test failures via subagent orchestration [DONE]
-   * StatsManager JSON persistence (symbolize_names removal) [DONE]
-   * CacheManager thread safety (LRU eviction under contention) [DONE]
-   * FormManager corrupt JSON handling (Kernel.warn) [DONE]
-   * ERB deprecation warnings (Ruby 3.2 compatibility) [DONE]
-   * Flaky concurrent test fixes [DONE]
-
-*Status:* Phase 3 complete - 346 LOC server routes, 192 LOC integration tests, 100% passing.
-*Test metrics:* 229 examples, 0 failures, 2 pending (expected)
-*Improvement:* 16 failures → 0 failures (100% success rate, 93.75% failure reduction)
-*Documentation:* PHASE3_COMPLETION.md, PHASE3_FINAL_REPORT.md (1,597 lines)
-
-=== Phase 4: WebSocket & Advanced Routes - ✓ COMPLETE
-
-1. *Create +Showoff::Server::WebSocketManager+ class* - *COMPLETE*
-   Extract WebSocket handling:
-   * Connection management [DONE]
-   * Message routing (12 message types) [DONE]
-   * Event handlers for each message type [DONE]
-   * Real-time slide synchronization [DONE]
-   * 99% test coverage (800 LOC tests) [DONE]
-
-2. *Create +Showoff::Server::ExecutionManager+ class* - *COMPLETE*
-   Extract code execution:
-   * Parser configuration [DONE]
-   * Sandboxed execution [DONE]
-   * Timeout handling [DONE]
-   * 100% test coverage (135 LOC tests) [DONE]
-
-3. *Create +Showoff::Server::ActivityManager+ class* - *COMPLETE*
-   Extract activity tracking:
-   * Completion status tracking [DONE]
-   * Thread-safe implementation [DONE]
-   * 100% test coverage (215 LOC tests) [DONE]
-
-4. *Create +Showoff::Server::DownloadManager+ class* - *COMPLETE*
-   Extract download file management:
-   * Slide-specific and shared file support [DONE]
-   * Enabled/disabled download tracking [DONE]
-   * 100% test coverage (227 LOC tests) [DONE]
-
-5. *Extract remaining routes* - *COMPLETE*
-   * +GET /presenter+ - Presenter view [DONE]
-   * +GET /slides+ - Slide content (AJAX) [DONE]
-   * +GET /onepage+, +/print+ - Print views [DONE]
-   * +GET /supplemental/:content+ - Supplemental materials [DONE]
-   * +GET /execute/:lang+ - Code execution [DONE]
-   * +GET /download+ - File downloads page [DONE]
-     - Lists all downloadable files with slide numbers [DONE]
-     - Separates slide-specific vs shared files [DONE]
-     - Full template integration [DONE]
-     - 19 integration tests, all passing [DONE]
-
-6. *Authentication integration* - *COMPLETE*
-   * Presenter cookie validation [DONE]
-   * Master presenter tracking [DONE]
-   * Protected route handling [DONE]
-
-=== Phase 5: Integration
-
-1. *Update +showoff_ng.rb+*
-    Add server instantiation alongside static generation.
-    Route +serve+ command through new architecture.
-
-2. *Update +bin/showoff+*
-    Remove +--dev+ flag requirement.
-    Default to new architecture.
-
-3. *Deprecate +showoff.rb+*
-    Add deprecation notice.
-    Maintain for one major version.
-
-4. *Remove +showoff.rb+*
-    Delete legacy code after deprecation period.
-
-== File Structure (Target)
+=== Core Components
 
   lib/
-  +-- showoff.rb                    # Entry point (replaces showoff_ng.rb)
+  +-- showoff_ng.rb              # Main orchestrator for static/pdf
   +-- showoff/
-      +-- config.rb                 # [exists]
-      +-- state.rb                  # [exists]
-      +-- locale.rb                 # [exists]
-      +-- logger.rb                 # [exists]
-      +-- version.rb                # [exists]
-      +-- monkeypatches.rb          # [exists]
-      +-- compiler.rb               # [exists]
+      +-- config.rb              # Configuration loading
+      +-- state.rb               # Global state singleton
+      +-- locale.rb              # i18n handling
+      +-- logger.rb              # Logging wrapper
+      +-- version.rb             # Version constant
+      +-- compiler.rb            # Markdown→HTML orchestrator
       +-- compiler/
-      |   +-- downloads.rb          # [exists]
-      |   +-- fixups.rb             # [exists]
-      |   +-- form.rb               # [exists]
-      |   +-- glossary.rb           # [exists]
-      |   +-- i18n.rb               # [exists]
-      |   +-- notes.rb              # [exists]
-      |   +-- table_of_contents.rb  # [exists]
-      |   +-- variables.rb          # [exists]
-      +-- presentation.rb           # [exists]
+      |   +-- downloads.rb       # Download link tracking
+      |   +-- fixups.rb          # DOM transformations
+      |   +-- form.rb            # Form element rendering
+      |   +-- glossary.rb        # Glossary generation
+      |   +-- i18n.rb            # Language content selection
+      |   +-- notes.rb           # Speaker notes extraction
+      |   +-- table_of_contents.rb # TOC generation
+      |   +-- variables.rb       # Variable interpolation
+      +-- presentation.rb        # Presentation model
       +-- presentation/
-      |   +-- section.rb            # [exists]
-      |   +-- slide.rb              # [exists]
-      +-- server.rb                 # [PARTIAL] Sinatra app base
-       +-- server/
-           +-- session_state.rb      # [DONE] Session management (169 LOC, 95%+ coverage)
-           +-- stats_manager.rb      # [DONE] Statistics (205 LOC, 95%+ coverage)
-           +-- form_manager.rb       # [DONE] Form storage (216 LOC, 95%+ coverage)
-           +-- cache_manager.rb      # [DONE] LRU cache (142 LOC, 95%+ coverage)
-           +-- download_manager.rb   # [DONE] Download file tracking (122 LOC, 100% coverage)
-           +-- activity_manager.rb   # [DONE] Activity completion tracking (118 LOC, 100% coverage)
-           +-- routes.rb             # [TODO] Route handlers
-           +-- websocket.rb          # [TODO] Real-time
-            +-- execution_manager.rb  # [DONE] Code execution
+      |   +-- section.rb         # Section model
+      |   +-- slide.rb           # Slide model
+      +-- server.rb              # Sinatra::Base server
+      +-- server_adapter.rb      # CLI compatibility layer
+      +-- server/
+          +-- session_state.rb   # Thread-safe session management
+          +-- stats_manager.rb   # Statistics tracking
+          +-- form_manager.rb    # Form response storage
+          +-- cache_manager.rb   # LRU cache
+          +-- download_manager.rb # Download file tracking
+          +-- activity_manager.rb # Activity completion tracking
+          +-- execution_manager.rb # Code execution
+          +-- websocket_manager.rb # Real-time synchronization
+          +-- feedback_manager.rb # Audience feedback
 
-== Testing Strategy
+=== Key Improvements
 
-The existing test suite uses +showoff_ng.rb+ exclusively. As components are
-extracted from +showoff.rb+:
+* *Modular Design*: Clean separation of concerns across focused classes
+* *Thread Safety*: All state managers use Mutex-based synchronization
+* *Testability*: 500+ tests with 100% coverage on server components
+* *Maintainability*: Average module size < 200 LOC
+* *No New Dependencies*: Uses only stdlib for thread safety
 
-1. Write unit tests for each new module before extraction
-2. Ensure feature parity with legacy behavior
-3. Add integration tests for server routes
-4. Add WebSocket tests using mock connections
+== Version History
 
-=== Current Test Coverage (Phase 4, Final)
+[v0.20.2]
+  Started refactoring with +showoff_ng.rb+ for static/pdf commands.
 
-*Unit Tests Completed:*
-* +spec/unit/showoff/server/session_state_spec.rb+ - 15 tests, 95%+ coverage
-* +spec/unit/showoff/server/stats_manager_spec.rb+ - 20 tests, 95%+ coverage
-* +spec/unit/showoff/server/form_manager_spec.rb+ - 16 tests, 95%+ coverage
-* +spec/unit/showoff/server/cache_manager_spec.rb+ - 14 tests, 95%+ coverage
-* +spec/unit/showoff/server/download_manager_spec.rb+ - 18 tests, 100% coverage
-* +spec/unit/showoff/server/activity_manager_spec.rb+ - 16 tests, 100% coverage
-* +spec/unit/showoff/server/execution_manager_spec.rb+ - 14 tests, 100% coverage
-* +spec/unit/showoff/server/websocket_manager_spec.rb+ - 88 tests, 99% coverage
-* +spec/unit/showoff/server/feedback_manager_spec.rb+ - 59 tests, 100% coverage
+[v0.21.0]
+  New server architecture available via +SHOWOFF_USE_NEW_SERVER=true+.
 
-*Integration Tests:*
-* +spec/integration/showoff/server/routes_spec.rb+ - 50 tests (including route tests for all extracted routes)
+[v0.22.0]
+  New architecture became the default. Legacy available via
+  +SHOWOFF_USE_LEGACY_SERVER=true+.
 
-*Total:* 310 test cases (260 unit + 50 integration), 3,800 LOC test code, 12 concurrency tests
+[v0.23.0]
+  Legacy architecture deprecated with warnings.
 
-*Thread Safety Validation:*
-All components tested with 10-12 concurrent threads performing 100-500 operations
-each. No data loss, race conditions, or corruption detected.
+[v0.24.0]
+  Legacy architecture removed. Refactoring complete.
 
-*Run tests:*
-  # In container (recommended)
-  podman build -t showoff:test -f Containerfile.test .
-  podman run --rm showoff:test
+== Test Coverage
 
-  # Or locally (requires Ruby 2.6+)
-  bundle install
-  bundle exec rspec spec/
+* *Total Tests*: 500+ examples
+* *Server Components*: 100% coverage
+* *Thread Safety*: Validated with 10-12 concurrent threads
+* *Integration Tests*: 50+ route tests via Rack::Test
 
-== Risks and Considerations
+== Historical Documentation
 
-[State Management] - *MITIGATED*
-  The legacy code uses class variables (@@) for shared state. The new
-  state managers (+SessionState+, +StatsManager+, +FormManager+, +CacheManager+)
-  use Mutex-based synchronization for thread safety. Validated with concurrent
-  access tests (10+ threads, 100-500 operations each). No new external dependencies.
+Detailed phase completion reports and design documents are preserved in
++documentation/archive/+ for historical reference:
 
-[WebSocket Compatibility]
-  +sinatra-websocket+ uses EventMachine. Consider whether to maintain this
-  dependency or migrate to a more modern solution like Faye or ActionCable.
-
-[Backwards Compatibility]
-  Some presentations may depend on undocumented behavior. Extensive testing
-  with real-world presentations is essential.
-
-[Performance]
-  The legacy code has caching baked in. Ensure the new architecture
-  maintains equivalent or better performance.
-
-== Progress Status (Updated 2025-12-24)
-
-=== Completed (100% by effort)
-
-*Phase 1: Server Infrastructure* - ✓ COMPLETE
-* 4 state managers extracted (SessionState, StatsManager, FormManager, CacheManager)
-* 809 LOC implementation, 925 LOC tests
-* 95%+ test coverage on all components
-* Thread-safe Mutex-based implementations
-* Comprehensive concurrency testing
-* 4 architecture documents created (DEPENDENCY_ANALYSIS.md, SERVER_ARCHITECTURE.md,
-  ARCHITECTURE_DIAGRAM.md, ARCHITECTURE_DECISIONS.md, REFACTOR_PROGRESS.md)
-
-*Phase 3: Route Extraction & Testing* - ✓ COMPLETE
-* Core routes extracted to Showoff::Server class
-* Integration test suite with 14 route tests
-* Container infrastructure with clean builds
-* Bug fixes and improvements (15+ test failures fixed)
-* 346 LOC server routes, 192 LOC integration tests
-
-*Phase 4: WebSocket & Advanced Routes* - ✓ COMPLETE
-* WebSocketManager class complete (650 LOC, 99% test coverage)
-* FeedbackManager class complete (250 LOC, 100% test coverage)
-* ExecutionManager class complete (200+ LOC, 100% test coverage)
-* DownloadManager class complete (122 LOC, 100% test coverage)
-* ActivityManager class complete (118 LOC, 100% test coverage)
-* All routes extracted including WebSocket (GET /control)
-* GET /execute/:lang route extracted with security features
-* GET /supplemental/:content route extracted with proper filtering
-* GET /slides, /onepage, /print, /presenter routes extracted
-* Fixed critical Sinatra::Wrapper issue (new! vs new)
-* Fixed 8 additional test failures (Logger nil checks, URL path fixes)
-
-*Phase 5: Integration & Validation* - ✓ COMPLETE
-* ServerAdapter compatibility layer created (280 LOC)
-* Feature flag implemented (+SHOWOFF_USE_NEW_SERVER=true+)
-* CLI integration with both architectures
-* Presentation loading fixed
-* SSL configuration translation
-* Option mapping for 20+ CLI options
-* All 507 tests passing (0 failures)
-* Container build and validation
-* Performance benchmarking
-* Deployment testing
-
-*Phase 5b: Default Switch (v0.22.0)* - ✓ COMPLETE
-* New architecture is now the DEFAULT
-* Legacy mode available via +SHOWOFF_USE_LEGACY_SERVER=true+
-* Documentation updated for v0.22.0 release
-* MIGRATION_GUIDE.md created
-* CHANGELOG.txt updated
-
-=== Remaining Work
-
-*Phase 5c (v0.23.0):* Add deprecation warnings for legacy mode
-*Phase 5d (v0.24.0):* Remove legacy code path
-
-*Estimated Total Remaining:* 0 days
-
-=== Key Metrics
-
-* New code: ~3,480 LOC total (including ServerAdapter: 280 LOC)
-* Test code: ~3,800 LOC total
-* Test:Code ratio: 1.09:1
-* Coverage: 100% on new components ✓
-* Thread safety: Validated with 10-12 concurrent threads ✓
-* Container builds: Clean, no workarounds ✓
-* No new external dependencies ✓
-* Tests: 507 examples (up from 356)
-* Test pass rate: 100% (507 examples, 0 failures, 4 pending as expected) ✓
-
-=== Documentation
-
-See +documentation/+ directory for detailed architecture and progress documentation:
-* REFACTOR_PROGRESS.md - Detailed progress report with metrics
-* DEPENDENCY_ANALYSIS.md - Complete dependency mapping (500+ lines)
-* SERVER_ARCHITECTURE.md - Architectural design specification
-* ARCHITECTURE_DIAGRAM.md - Component diagrams (Mermaid)
-* ARCHITECTURE_DECISIONS.md - ADRs for 10 key decisions
-* PHASE3_COMPLETION.md - Phase 3 completion summary (1,075 lines)
-* PHASE3_FINAL_REPORT.md - Comprehensive Phase 3 report (1,597 lines)
-* PHASE4_COMPLETION.md - Phase 4 completion summary
-* PHASE5_COMPLETION.md - Phase 5 completion summary
-* PHASE5_INTEGRATION_DESIGN.md - Phase 5 integration design
-* WEBSOCKET_MANAGER_DESIGN.md - WebSocket design specification
-* WEBSOCKET_ARCHITECTURE_DIAGRAM.md - WebSocket architecture diagrams
-* WEBSOCKET_MANAGER_SUMMARY.md - WebSocket implementation summary
-* WEBSOCKET_MANAGER_QUICK_REF.md - WebSocket API quick reference
-* FEEDBACKMANAGER_DESIGN.md - Feedback manager design specification
-* USAGE_NEW_SERVER.md - User guide for new server architecture
-* MIGRATION_GUIDE.md - Migration guide for users upgrading to v0.22.0
+* PHASE3_COMPLETION.md - Route extraction
+* PHASE4_COMPLETION.md - WebSocket implementation
+* PHASE5_COMPLETION.md - Integration and validation
+* MIGRATION_GUIDE.md - User migration guide (historical)
+* Various design documents
 
 == Contributing
 
-When working on this refactor:
+When working on Showoff:
 
-1. All new code should follow the +showoff_ng+ patterns
-2. Each extracted component should be a focused, testable class
-3. Maintain backwards compatibility until deprecation
-4. Update this document as migration progresses
-5. Add tests for any new functionality
-6. Run tests: +bundle exec rspec spec/unit/showoff/server/+
-7. Consult architecture docs in +documentation/+ before making decisions
+1. All code follows the modular patterns established in this refactor
+2. Each component should be a focused, testable class
+3. Add tests for any new functionality
+4. Run tests: +bundle exec rspec spec/+
+5. Consult architecture docs in +documentation/+ for design guidance

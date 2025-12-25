@@ -1,3 +1,23 @@
+0.23.0
+  * BREAKING: Legacy server architecture removed
+  * Removed Test::Unit tests and test directory
+  * Added server_adapter.rb implementation
+  * Removed SHOWOFF_USE_LEGACY_SERVER environment variable
+  * Removed compatibility shims and feature flags
+  * Simplified CLI - single code path for all commands
+  * Documentation updated to reflect single architecture
+  * Archived historical refactoring documentation
+
+This release completes the multi-phase refactoring effort that began in v0.20.2.
+The codebase is now fully modular with clean separation of concerns.
+
+0.22.0
+  * Legacy server architecture deprecated with warnings
+  * Added deprecation notices when SHOWOFF_USE_LEGACY_SERVER is used
+  * Final opportunity to test presentations before legacy removal
+  * All functionality verified equivalent between architectures
+  * Preparation for legacy code removal in v0.23.0
+
 0.22.0
   * NEW: Modular server architecture is now the DEFAULT
   * The `showoff serve` command now uses the new architecture by default
@@ -5,16 +25,6 @@
   * Thread-safe state managers for sessions, stats, forms, and caching
   * WebSocket handling via new WebSocketManager class
   * Comprehensive test coverage: 507 tests, 0 failures
-  * See documentation/MIGRATION_GUIDE.md for migration details
-
-DEPRECATION NOTICE: The legacy server architecture (showoff.rb) is deprecated
-and will be removed in v0.24.0. Please test your presentations with the new
-architecture and report any issues.
-
-Timeline:
-  * v0.22.0 (current): New architecture is default
-  * v0.23.0: Legacy deprecated with warnings
-  * v0.24.0: Legacy removed
 
 0.20.4
 	* Improved the output of showoff validate (thanks to @ccactus @932)

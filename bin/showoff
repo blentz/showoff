@@ -1,7 +1,6 @@
 #! /usr/bin/env ruby
 
 $LOAD_PATH.unshift File.join(File.dirname(__FILE__), '..', 'lib')
-#require 'showoff'
 require 'showoff/version'
 require 'rubygems'
 require 'fidget'
@@ -28,7 +27,6 @@ module Wrapper
     The simplest use case is to run `showoff serve` from the directory containing
     the showoff.json file.
   desc
-  switch :dev, :desc => "Use the next-gen development version of Showoff"
   switch :debug, :desc => "Show application backtraces on crash"
 
   desc 'Create new showoff presentation'
@@ -80,7 +78,65 @@ module Wrapper
     c.switch [:j,:json]
 
     c.action do |global_options,options,args|
-      ShowoffUtils.info(options[:f], options[:j])
+      begin
+        # Load config
+        config_file = options[:f] || ShowoffUtils.presentation_config_file
+        Showoff::Config.load(config_file)
+
+        # Get presentation info
+        title = Showoff::Config.get('name') || "Untitled Presentation"
+
+        # Collect information
+        data = {}
+        data['files'] = Showoff::Config.sections.values.flatten
+        data['styles'] = Dir.glob("#{Showoff::Config.root}/*.css").map { |path| File.basename(path) }
+        data['scripts'] = Dir.glob("#{Showoff::Config.root}/*.js").map { |path| File.basename(path) }
+
+        # Find images in HTML files
+        data['images'] = []
+        data['files'].each do |file|
+          file_path = File.join(Showoff::Config.root, file)
+          if File.exist?(file_path) && File.extname(file) == '.md'
+            content = File.read(file_path)
+            # Simple regex to find image references in markdown
+            content.scan(/!\[.*?\]\((.*?)\)/).each do |match|
+              data['images'] << match[0]
+            end
+          end
+        end
+
+        # Now grep through the styles and identify referenced images
+        data['styles'].each do |style|
+          style_path = File.join(Showoff::Config.root, style)
+          if File.exist?(style_path)
+            File.readlines(style_path).each do |line|
+              next unless line =~ /url\(\'(\S+)\'\)/
+              data['images'] << $1
+            end
+          end
+        end
+
+        # Make sure images are unique
+        data['images'].uniq!
+
+        # Output the information
+        if options[:j]
+          puts JSON.pretty_generate(data)
+        else
+          puts "Presentation: #{title}"
+          puts "Slides: #{data['files'].length}"
+          puts
+
+          data.each do |key, list|
+            puts "#{key.capitalize}:"
+            list.each {|file| puts "    * #{file}" }
+            puts
+          end
+        end
+      rescue => e
+        puts "Error: #{e.message}"
+        puts e.backtrace.join("\n")
+      end
     end
   end
 
@@ -92,7 +148,103 @@ module Wrapper
     c.flag [:f,:file]
 
     c.action do |global_options,options,args|
-      ShowoffUtils.validate(options[:f])
+      require 'showoff_ng'
+      require 'showoff/compiler'
+      require 'showoff/presentation'
+      require 'tempfile'
+      require 'nokogiri'
+
+      # Load config
+      config_file = options[:f] || ShowoffUtils.presentation_config_file
+      Showoff::Config.load(config_file)
+
+      # Set content locale
+      Showoff::Locale.setContentLocale(nil)
+
+      # Get validators from config
+      validators = Showoff::Config.get('validators') || {}
+      files = []
+      errors = []
+
+      # Get a list of actual filenames
+      files = ShowoffUtils.showoff_slide_files('.')
+      files.each do |filename|
+        unless File.exist? filename
+          errors << "Missing path: #{filename}"
+          next
+        end
+
+        if filename.downcase.end_with? '.md'
+          print '.'
+
+          # Read file content
+          content = File.read(filename)
+
+          # Use a simpler approach to extract code blocks
+          # This regex matches code blocks in markdown: ```language\ncode\n```
+          code_blocks = []
+          content.scan(/```(\w+)(.*?)```/m).each_with_index do |(lang, code), index|
+            code_blocks << [lang, code.strip, []]
+          end
+
+          # Also look for indented code blocks with language specifiers
+          content.scan(/\n    @@@\s*(\w+)(.*?)(?:\n\n|\z)/m).each_with_index do |(lang, code), index|
+            code_blocks << [lang, code.strip.gsub(/^    /, ''), []]
+          end
+
+          # Create a simple HTML document with code blocks
+          html = "<html><body>"
+          code_blocks.each do |lang, code, _|
+            html += "<pre><code class=\"language-#{lang}\">#{code}</code></pre>"
+          end
+          html += "</body></html>"
+
+          # Parse HTML
+          doc = Nokogiri::HTML(html)
+
+          # Extract code blocks
+          doc.css('pre code').each_with_index do |code_block, index|
+            # Get language from class
+            lang = nil
+            classes = code_block['class'].to_s.split
+            classes.each do |cls|
+              if cls =~ /language-(\w+)/
+                lang = $1
+                break
+              end
+            end
+
+            # Get code
+            code = code_block.text
+
+            # Skip validation if marked as no-validate
+            if classes.include? 'no-validate'
+              print '-'
+              next
+            end
+
+            # Validate if we have a validator for this language
+            validator = validators[lang]
+            if validator
+              # Write to temp file and validate
+              Tempfile.open('showoff-validation') do |f|
+                File.write(f.path, code)
+                unless system("#{validator} #{f.path}", :out => File::NULL, :err => File::NULL)
+                  print 'F'
+                  errors << "Invalid #{lang} code on #{filename} [#{index}]"
+                end
+              end
+            end
+          end
+        end
+      end
+
+      puts
+      puts "Found #{errors.size} errors."
+      unless errors.empty?
+        errors.each { |err| puts " * #{err}" }
+        exit 1
+      end
     end
   end
 
@@ -163,9 +315,6 @@ module Wrapper
 Starts a web server to display your presentation. By default, the server
 runs on http://0.0.0.0:9090
 
-To use the legacy server architecture (deprecated):
-  SHOWOFF_USE_LEGACY_SERVER=true showoff serve
-
 Options:
 EOS
   command :serve do |c|
@@ -199,10 +348,10 @@ EOS
     c.desc 'Run via HTTPS'
     c.switch [:s, :ssl]
 
-    c.desc 'Path to SSL certificate. Showoff will generate one automatically if unset.'
+    c.desc 'Path to SSL certificate'
     c.flag :ssl_certificate
 
-    c.desc 'Path to SSL private key. Showoff will generate one automatically if unset.'
+    c.desc 'Path to SSL private key'
     c.flag :ssl_private_key
 
     c.desc 'JSON file used to describe presentation'
@@ -220,7 +369,7 @@ EOS
 
     c.action do |global_options,options,args|
 
-      # This is gross. A serious revamp in config file parsing is due.
+      # Load configuration from showoff.json
       config = JSON.parse(File.read(options[:f])) rescue {}
       if Gem::Version.new(config['version'].to_s) > Gem::Version.new(SHOWOFF_VERSION) then
         raise "This presentation requires Showoff version #{config['version']} or greater."
@@ -264,15 +413,6 @@ EOS
         puts
       end
 
-      # Determine which architecture to use
-      use_legacy_server = ENV['SHOWOFF_USE_LEGACY_SERVER'] == 'true' || ENV['SHOWOFF_USE_LEGACY_SERVER'] == '1'
-
-      # Show deprecation warning if legacy server is used
-      if use_legacy_server
-        STDERR.puts "\n\033[33mWARNING: Legacy server architecture is deprecated and will be removed in v0.24.0.\033[0m"
-        STDERR.puts "\033[33mPlease test with the new architecture and report issues.\033[0m\n\n"
-      end
-
       # Helper method to configure SSL
       configure_ssl = lambda do |server, opts|
         if opts[:ssl]
@@ -281,33 +421,18 @@ EOS
         end
       end
 
-      # Git repository handling (same for both architectures)
+      # Start the server
       if options[:url]
+        # Git repository handling
         ShowoffUtils.clone(options[:git_url], options[:git_branch], options[:git_path]) do
-          if use_legacy_server
-            # Legacy architecture
-            Showoff.run!(options) do |server|
-              configure_ssl.call(server, options)
-            end
-          else
-            # New architecture (default)
-            Showoff::ServerAdapter.run!(options) do |server|
-              configure_ssl.call(server, options)
-            end
-          end
-        end
-      else
-        # Direct invocation (no git clone)
-        if use_legacy_server
-          # Legacy architecture
-          Showoff.run!(options) do |server|
-            configure_ssl.call(server, options)
-          end
-        else
-          # New architecture (default)
           Showoff::ServerAdapter.run!(options) do |server|
             configure_ssl.call(server, options)
           end
+        end
+      else
+        # Direct invocation
+        Showoff::ServerAdapter.run!(options) do |server|
+          configure_ssl.call(server, options)
         end
       end
 
@@ -390,30 +515,25 @@ EOS
       ENV['GLI_DEBUG'] = 'true'
     end
 
-    # Feature flag for legacy server architecture
-    use_legacy_server = ENV['SHOWOFF_USE_LEGACY_SERVER'] == 'true' || ENV['SHOWOFF_USE_LEGACY_SERVER'] == '1'
-
-    # Show deprecation warning if legacy server is used
-    if use_legacy_server && command.name == :serve
-      STDERR.puts "\n\033[33mWARNING: Legacy server architecture is deprecated and will be removed in v0.24.0.\033[0m"
-      STDERR.puts "\033[33mPlease test with the new architecture and report issues.\033[0m\n\n"
-    end
-
-    # Route commands to appropriate backend
-    if global[:dev] || ['static', 'pdf'].include?(command.name.to_s)
-      # Static/PDF always use showoff_ng
+    # Load required libraries based on command
+    case command.name.to_s
+    when 'static', 'pdf'
       require 'showoff_ng'
       if options[:file]
         Showoff::Config.load(options[:file])
       end
-    elsif use_legacy_server && command.name == :serve
-      # Legacy architecture (opt-out via env var)
-      require 'showoff'
-    else
-      # New architecture (default)
+    when 'serve'
       require 'showoff_ng'
       require 'showoff/server'
       require 'showoff/server_adapter'
+    when 'info', 'validate'
+      require 'showoff_ng'
+      require 'showoff_utils'
+      require 'nokogiri'
+      require 'json'
+    else
+      # Other commands use showoff_utils
+      require 'showoff_utils'
     end
 
     true

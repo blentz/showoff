@@ -88,24 +88,11 @@ begin
   end
 rescue Errno::ENOENT => e
   # Logging inside initialize can be unsafe before Rack env exists.
-  warn "Presentation directory or file not found: #{@options[:pres_dir]}/#{@options[:pres_file]}"
-
-  # Fallback to test presentation to allow server to start
-  create_fallback_presentation('Test Presentation')
-  self.class.set :showoff_config, { 'name' => 'Test', 'sections' => ['.'] }
+  raise "Presentation directory or file not found: #{@options[:pres_dir]}/#{@options[:pres_file]}"
 rescue JSON::ParserError => e
-  warn "Invalid JSON in #{@options[:pres_file]}: #{e.message}"
-
-  # Fallback to test presentation to allow server to start
-  create_fallback_presentation('Test Presentation (Invalid JSON)')
-  self.class.set :showoff_config, { 'name' => 'Test', 'sections' => ['.'] }
+  raise "Invalid JSON in #{@options[:pres_file]}: #{e.message}"
 rescue => e
-  warn "Error loading presentation: #{e.message}"
-  warn e.backtrace.join("\n")
-
-  # Fallback to test presentation to allow server to start
-  create_fallback_presentation('Test Presentation (Error)')
-  self.class.set :showoff_config, { 'name' => 'Test', 'sections' => ['.'] }
+  raise "Error loading presentation: #{e.message}"
 end
   end
 
@@ -150,8 +137,6 @@ end
     set :server, 'thin'
     set :pres_dir, nil  # Will be set in initialize
     set :showoff_config, {}  # Will be set in initialize
-    set :sockets, []  # Legacy - WebSocketManager tracks internally
-    set :presenters, []  # Legacy - WebSocketManager tracks internally
 
     # I18n configuration
     require 'i18n'
@@ -265,7 +250,7 @@ end
       erb :index
     rescue => e
       # Log error if logger is available
-      logger.error("Error rendering index: #{e.message}") if respond_to?(:logger) && logger
+      logger.error("Error rendering index: #{e.message}")
 
       # Return a basic error page
       status 500
@@ -314,8 +299,8 @@ end
       erb :presenter
     rescue => e
       # Log error if logger is available
-      logger.error("Error rendering presenter: #{e.message}") if respond_to?(:logger) && logger
-      logger.debug(e.backtrace.join("\n")) if respond_to?(:logger) && logger
+      logger.error("Error rendering presenter: #{e.message}")
+      logger.debug(e.backtrace.join("\n"))
 
       # Return a basic error page
       status 500
@@ -332,7 +317,7 @@ end
     # Check for missing client_id - return 400 Bad Request
     if client_id.nil? || client_id.empty?
       # Log warning if logger is available
-      logger.warn("Form submission rejected: Missing client_id cookie for form #{id}") if respond_to?(:logger) && logger
+      logger.warn("Form submission rejected: Missing client_id cookie for form #{id}")
 
       status 400
       content_type :json
@@ -340,9 +325,7 @@ end
     end
 
     # Log if logger is available
-    if respond_to?(:logger) && logger
-      logger.warn("Saving form answers from ip:#{request.ip} with ID of #{client_id} for form #{id}")
-    end
+  logger.warn("Saving form answers from ip:#{request.ip} with ID of #{client_id} for form #{id}")
 
     # Extract form data, excluding routing metadata
     form_data = params.reject { |k,v| ['splat', 'captures', 'id'].include? k }
@@ -391,9 +374,10 @@ end
         else
           response_tallies[val.to_s] ||= 0
           response_tallies[val.to_s] += 1
-        end
       end
     end
+  end
+end
 
     content_type :json
     aggregate.to_json
@@ -405,8 +389,12 @@ end
     begin
       # Only show detailed stats to localhost/presenter
       if localhost?
-        # Use StatsManager's legacy_counter method to get pageviews data
-        @counter = stats.legacy_counter
+        # Get pageviews data
+        @counter = {
+          'pageviews' => stats.pageviews,
+          'current' => stats.current_viewers,
+          'user_agents' => stats.user_agents
+        }
       else
         @counter = nil
       end
@@ -430,7 +418,7 @@ end
       erb :stats
     rescue => e
       # Log error if logger is available
-      logger.error("Error rendering stats: #{e.message}") if respond_to?(:logger) && logger
+      logger.error("Error rendering stats: #{e.message}")
 
       # Return a basic error page
       status 500
@@ -457,7 +445,7 @@ end
   get '/edit/*' do |path|
     # Docs suggest that old versions of Sinatra might provide an array here, so just make sure.
     filename = path.class == Array ? path.first : path
-    logger.debug "Editing #{filename}" if respond_to?(:logger) && logger
+    logger.debug "Editing #{filename}"
 
     # When a relative path is used, it's sometimes fully expanded. But then when
     # it's passed via URL, the initial slash is lost. Here we try to get it back.
@@ -466,7 +454,7 @@ end
 
     # Only allow editing from localhost
     unless localhost?
-      logger.warn "Disallowing edit because #{request.host} isn't localhost." if respond_to?(:logger) && logger
+      logger.warn "Disallowing edit because #{request.host} isn't localhost."
       return
     end
 
@@ -478,7 +466,7 @@ end
     when /cygwin|mswin|mingw|bccwin|wince|emx/
       `start #{filename}`
     else
-      logger.warn "Cannot open #{filename}, unknown platform #{RUBY_PLATFORM}." if respond_to?(:logger) && logger
+      logger.warn "Cannot open #{filename}, unknown platform #{RUBY_PLATFORM}."
     end
   end
 
@@ -495,7 +483,7 @@ end
     if normalized_path.start_with?(pres_dir_path) && File.exist?(normalized_path)
       send_file normalized_path
     else
-      logger.warn "Rejecting request for path outside presentation directory: #{path}" if respond_to?(:logger) && logger
+      logger.warn "Rejecting request for path outside presentation directory: #{path}"
       raise Sinatra::NotFound
     end
   end
@@ -532,8 +520,8 @@ end
       erb :onepage
     rescue => e
       # Log error if logger is available
-      logger.error("Error rendering print view: #{e.message}") if respond_to?(:logger) && logger
-      logger.debug(e.backtrace.join("\n")) if respond_to?(:logger) && logger
+      logger.error("Error rendering print view: #{e.message}")
+      logger.debug(e.backtrace.join("\n"))
 
       # Return a basic error page
       status 500
@@ -564,8 +552,8 @@ end
       erb :onepage
     rescue => e
       # Log error if logger is available
-      logger.error("Error rendering onepage view: #{e.message}") if respond_to?(:logger) && logger
-      logger.debug(e.backtrace.join("\n")) if respond_to?(:logger) && logger
+      logger.error("Error rendering onepage view: #{e.message}")
+      logger.debug(e.backtrace.join("\n"))
 
       # Return a basic error page
       status 500
@@ -601,8 +589,8 @@ end
       erb :onepage
     rescue => e
       # Log error if logger is available
-      logger.error("Error rendering supplemental content: #{e.message}") if respond_to?(:logger) && logger
-      logger.debug(e.backtrace.join("\n")) if respond_to?(:logger) && logger
+      logger.error("Error rendering supplemental content: #{e.message}")
+      logger.debug(e.backtrace.join("\n"))
 
       # Return a basic error page
       status 500
@@ -653,7 +641,7 @@ end
       erb :download
     rescue => e
       # Log error if logger is available
-      logger.error("Error rendering download page: #{e.message}") if respond_to?(:logger) && logger
+      logger.error("Error rendering download page: #{e.message}")
 
       # Return a basic error page
       status 500
@@ -677,8 +665,8 @@ end
       execution_manager.execute(lang, code)
     rescue => e
       # Log error if logger is available
-      logger.error("Error executing code: #{e.message}") if respond_to?(:logger) && logger
-      logger.debug(e.backtrace.join("\n")) if respond_to?(:logger) && logger
+      logger.error("Error executing code: #{e.message}")
+      logger.debug(e.backtrace.join("\n"))
 
       # Return error message
       "Error executing code: #{e.message}"
@@ -690,23 +678,23 @@ end
   get '/slides' do
     begin
       # Log cache status if logger is available
-      logger.info "Cached presentations: #{cache.keys}" if respond_to?(:logger) && logger
+      logger.info "Cached presentations: #{cache.keys}"
 
       # Get locale from cookies
       @locale = locale(request.cookies['locale'])
 
       # Check if we have a cache and we're not asking to invalidate it
       if cache.key?(@locale) && params['cache'] != 'clear'
-        logger.info "Using cached slides for locale: #{@locale}" if respond_to?(:logger) && logger
+        logger.info "Using cached slides for locale: #{@locale}"
         return cache.get(@locale)
       end
 
       # Log that we're generating new content
-      logger.info "Generating slides for locale: #{@locale}" if respond_to?(:logger) && logger
+      logger.info "Generating slides for locale: #{@locale}"
 
       # If we're displaying from a repository, update it
       if settings.respond_to?(:url) && settings.url
-        logger.info "Updating presentation repository..." if respond_to?(:logger) && logger
+        logger.info "Updating presentation repository..."
         system('git', 'pull')
       end
 
@@ -722,8 +710,8 @@ end
       content
     rescue => e
       # Log error if logger is available
-      logger.error("Error generating slides: #{e.message}") if respond_to?(:logger) && logger
-      logger.debug(e.backtrace.join("\n")) if respond_to?(:logger) && logger
+      logger.error("Error generating slides: #{e.message}")
+      logger.debug(e.backtrace.join("\n"))
 
       # Return error response
       status 500
@@ -740,48 +728,7 @@ end
     request.env['REMOTE_HOST'] == 'localhost' || request.ip == '127.0.0.1'
   end
 
-  # Create a fallback presentation for tests or error cases
-  def create_fallback_presentation(title)
-    # If Showoff::Presentation is available, use it to create a proper presentation object
-    if defined?(Showoff::Presentation)
-      # Create a minimal presentation with required attributes
-      @presentation = Showoff::Presentation.allocate
-      @presentation.instance_variable_set(:@title, title)
-      @presentation.instance_variable_set(:@sections, [])
-      @presentation.instance_variable_set(:@baseurl, nil)
-      @presentation.instance_variable_set(:@favicon, 'favicon.ico')
-      @presentation.instance_variable_set(:@feedback, nil)
-      @presentation.instance_variable_set(:@pause_msg, nil)
-      @presentation.instance_variable_set(:@interactive, true)
-      @presentation.instance_variable_set(:@language, {})
-      @presentation.instance_variable_set(:@keymap, {})
-      @presentation.instance_variable_set(:@keycode_dictionary, {})
-      @presentation.instance_variable_set(:@keycode_shifted_keys, {})
-      @presentation.instance_variable_set(:@highlightStyle, 'default')
 
-      # Define title method if it doesn't exist
-      unless @presentation.respond_to?(:title)
-        @presentation.define_singleton_method(:title) { @title }
-      end
-    else
-      # Fallback to OpenStruct if Showoff::Presentation is not available
-      @presentation = OpenStruct.new(
-        title: title,
-        sections: [],
-        slides: [],
-        baseurl: nil,
-        favicon: 'favicon.ico',
-        feedback: nil,
-        pause_msg: nil,
-        interactive: true,
-        language: {},
-        keymap: {},
-        keycode_dictionary: {},
-        keycode_shifted_keys: {},
-        highlightStyle: 'default'
-      )
-    end
-  end
 
   # State manager accessors for testing and route handlers
   public
@@ -799,15 +746,13 @@ end
 
   # Helper method to generate slides HTML
   # This is a placeholder implementation that will be expanded later
-  def get_slides_html(options = {})
+  def get_slides_html(opts = {})
     # Log options if logger is available
-    if respond_to?(:logger) && logger
-      logger.debug("Generating slides HTML with options: #{options.inspect}")
-    end
+    logger.debug("Generating slides HTML with options: #{opts.inspect}")
 
     # For now, return a placeholder that can be expanded later
     # This is a transitional implementation during the refactoring process
-    "<div class='slides'>Placeholder slide content for #{options[:print] ? 'print' : 'onepage'} view</div>"
+    "<div class='slides'>Placeholder slide content for #{opts[:print] ? 'print' : 'onepage'} view</div>"
   end
 
   # WebSocket endpoint for real-time presenter/audience sync
@@ -831,7 +776,7 @@ end
         remote = request.env['REMOTE_HOST'] || request.env['REMOTE_ADDR']
         websocket_manager.add_connection(ws, client_id, session_id, remote)
 
-        logger.warn "Open WebSocket connections: #{websocket_manager.connection_count}" if respond_to?(:logger) && logger
+        logger.warn "Open WebSocket connections: #{websocket_manager.connection_count}"
       end
 
       # On message received
@@ -843,16 +788,15 @@ end
             env: request.env
           })
         rescue StandardError => e
-          logger.warn "WebSocket messaging error: #{e}" if respond_to?(:logger) && logger
-          logger.debug e.backtrace.join("\n") if respond_to?(:logger) && logger
+          logger.warn "WebSocket messaging error: #{e}"
+          logger.debug e.backtrace.join("\n")
         end
       end
 
       # On connection close
       ws.onclose do
-        logger.warn "WebSocket closed" if respond_to?(:logger) && logger
+        logger.warn "WebSocket closed"
         websocket_manager.remove_connection(ws)
       end
     end
   end
-end

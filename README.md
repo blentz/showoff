@@ -62,28 +62,38 @@ you'll need to install both Ruby and the Ruby DevKit for compiling native extens
     gem install showoff
 
 
-## What's New in v0.22.0
+## Architecture
 
-Version 0.22.0 introduces a completely refactored server architecture that is now
-the default. This new architecture provides:
+Showoff uses a modular server architecture built on Sinatra. Key components include:
 
-* **Modular codebase**: Clean separation of concerns for easier maintenance
-* **Thread-safe state management**: Improved reliability under concurrent load
-* **Better error handling**: More informative error messages and graceful failures
-* **Comprehensive test coverage**: 507 tests with 100% coverage on new components
+* **Showoff::Server** - Sinatra::Base web server with modular routes
+* **Showoff::Compiler** - Markdown-to-HTML compilation pipeline
+* **Showoff::Presentation** - Presentation model with sections and slides
+* **Thread-safe state managers** - For sessions, statistics, forms, and caching
+* **WebSocketManager** - Real-time slide synchronization
 
-### For Existing Users
+The architecture provides:
 
-The new architecture is fully backward compatible. Your existing presentations
-should work without any changes. If you encounter any issues:
+* Clean separation of concerns for easier maintenance
+* Thread-safe state management for reliability under concurrent load
+* Comprehensive test coverage (500+ tests)
+* Better error handling with informative messages
+
+
+## Quick Start
 
 ```bash
-# Temporarily use the legacy server (deprecated, will be removed in v0.24.0)
-SHOWOFF_USE_LEGACY_SERVER=true showoff serve
-```
+# Create a new presentation
+showoff create my_presentation
+cd my_presentation
 
-See [documentation/MIGRATION_GUIDE.md](documentation/MIGRATION_GUIDE.md) for
-detailed migration information.
+# Start the server
+showoff serve
+
+# Open in browser
+# Audience view: http://localhost:9090
+# Presenter view: http://localhost:9090/presenter
+```
 
 
 ## Documentation
@@ -94,6 +104,11 @@ for further information.
 You can also generate a nice & pretty local copy of the user manual by running
 `rake doc` in your clone of the repository. The generated HTML will be saved in
 the `docs` directory.
+
+Additional documentation:
+* [USAGE.rdoc](documentation/USAGE.rdoc) - Detailed usage guide
+* [CONFIGURATION.rdoc](documentation/CONFIGURATION.rdoc) - Configuration options
+* [AUTHORING.rdoc](documentation/AUTHORING.rdoc) - Slide authoring guide
 
 
 ## Contributing

@@ -1,6 +1,6 @@
-# Migration Guide: Showoff v0.22.0
+# Migration Guide: Showoff v0.23.0
 
-This guide helps you migrate from the legacy Showoff server architecture to the new modular architecture introduced in v0.22.0.
+This guide describes the modular architecture introduced in Showoff v0.21.0 and made the default in v0.22.0. As of v0.23.0, the legacy architecture has been completely removed.
 
 ## Overview
 
@@ -24,22 +24,24 @@ showoff serve
 
 ### If You Encounter Issues
 
-If you experience any problems with the new architecture, you can temporarily fall back to the legacy server:
+If you experience any problems with the architecture, please report them:
 
-```bash
-SHOWOFF_USE_LEGACY_SERVER=true showoff serve
-```
+1. **Gather information**:
+   - Showoff version (`showoff --version`)
+   - Ruby version (`ruby --version`)
+   - Operating system
+   - Error messages (full stack trace if available)
+   - Minimal reproduction case
 
-**Note:** The legacy server is deprecated and will be removed in v0.24.0. Please report any issues you encounter so they can be fixed.
+2. **Report on GitHub**: https://github.com/puppetlabs/showoff/issues
 
 ## Timeline
 
 | Version | Status | Notes |
 |---------|--------|-------|
 | v0.21.0 | Released | New architecture opt-in via `SHOWOFF_USE_NEW_SERVER=true` |
-| v0.22.0 | **Current** | New architecture is default, legacy opt-out |
-| v0.23.0 | Planned | Legacy deprecated with warnings |
-| v0.24.0 | Planned | Legacy removed |
+| v0.22.0 | Released | New architecture is default |
+| v0.23.0 | **Current** | Legacy architecture removed |
 
 ## What Changed
 
@@ -69,9 +71,9 @@ The monolithic `lib/showoff.rb` (2000+ LOC) has been replaced with a modular arc
 
 ## Compatibility
 
-### Fully Compatible
+### Features
 
-The following features work identically in both architectures:
+The modular architecture supports all Showoff features:
 
 - All presentation formats (Markdown, showoff.json)
 - Slide syntax (`<!SLIDE>`, notes, forms, etc.)
@@ -82,10 +84,6 @@ The following features work identically in both architectures:
 - Static HTML generation
 - PDF generation
 - All CLI options
-
-### Known Differences
-
-None. The new architecture is designed to be 100% compatible with the legacy architecture. If you find any differences, please report them as bugs.
 
 ## Troubleshooting
 
@@ -128,25 +126,16 @@ If forms aren't working:
 
 ## Reporting Issues
 
-If you encounter any issues with the new architecture:
+If you encounter any issues:
 
-1. **Check if it's architecture-specific** - Test with both:
-   ```bash
-   # New architecture (default)
-   showoff serve
-
-   # Legacy architecture
-   SHOWOFF_USE_LEGACY_SERVER=true showoff serve
-   ```
-
-2. **Gather information**:
+1. **Gather information**:
    - Showoff version (`showoff --version`)
    - Ruby version (`ruby --version`)
    - Operating system
    - Error messages (full stack trace if available)
    - Minimal reproduction case
 
-3. **Report on GitHub**: https://github.com/puppetlabs/showoff/issues
+2. **Report on GitHub**: https://github.com/puppetlabs/showoff/issues
 
 ## For Developers
 
@@ -154,9 +143,9 @@ If you encounter any issues with the new architecture:
 
 If you've written custom code that interacts with Showoff internals:
 
-1. **Check for class variable usage** - The new architecture uses instance-based state managers instead of class variables
+1. **Check for class variable usage** - The architecture uses instance-based state managers instead of class variables
 2. **Update Sinatra::Application references** - Use `Showoff::Server` instead
-3. **Test thoroughly** - Run your custom code with both architectures
+3. **Test thoroughly** - Run your custom code with the current architecture
 
 ### API Changes
 
@@ -175,16 +164,9 @@ The public API (CLI, showoff.json format, slide syntax) is unchanged. Internal A
 
 **A:** No. The new architecture is fully backward compatible with existing presentations.
 
-### Q: Will the legacy server be removed?
+### Q: Has the legacy server been removed?
 
-**A:** Yes, in v0.24.0. Please migrate before then.
-
-### Q: How do I know which architecture I'm using?
-
-**A:** Check the startup message. The new architecture logs:
-```
-Using new modular server architecture via ServerAdapter
-```
+**A:** Yes, as of v0.23.0, the legacy server has been completely removed.
 
 ### Q: Is the new architecture faster?
 
@@ -196,7 +178,7 @@ Using new modular server architecture via ServerAdapter
 
 ## Additional Resources
 
-- [USAGE_NEW_SERVER.md](USAGE_NEW_SERVER.md) - Detailed usage guide
-- [REFACTOR.rdoc](REFACTOR.rdoc) - Technical refactoring details
+- [USAGE.rdoc](../USAGE.rdoc) - Detailed usage guide
+- [REFACTOR.rdoc](../REFACTOR.rdoc) - Technical refactoring details
 - [PHASE5_COMPLETION.md](PHASE5_COMPLETION.md) - Phase 5 completion report
-- [SERVER_ARCHITECTURE.md](SERVER_ARCHITECTURE.md) - Architecture documentation
+- [SERVER_ARCHITECTURE.md](../SERVER_ARCHITECTURE.md) - Architecture documentation

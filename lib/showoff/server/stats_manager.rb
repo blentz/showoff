@@ -225,17 +225,7 @@ class Showoff::Server::StatsManager
     end
   end
 
-  # Get the full legacy @@counter structure.
-  #
-  # @return [Hash] A hash with 'pageviews', 'current', and 'user_agents' keys
-  def legacy_counter
-    # Don't wrap in @mutex.synchronize since the called methods already do that
-    {
-      'pageviews' => pageviews,
-      'current' => current_viewers,
-      'user_agents' => user_agents
-    }
-  end
+
 
   # Export statistics to JSON file.
   #
@@ -433,6 +423,18 @@ class Showoff::Server::StatsManager
       @pace.clear
       @session_data.clear
     end
+  end
+
+  # Returns the legacy counter structure for compatibility
+  # This method is provided for backward compatibility with tests
+  # @return [Hash] Legacy counter structure
+  def legacy_counter
+    # Don't use @mutex.synchronize here to avoid deadlock with pageviews, etc.
+    {
+      'pageviews' => pageviews,
+      'current' => current_viewers,
+      'user_agents' => user_agents
+    }
   end
 
   private

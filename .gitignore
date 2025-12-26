@@ -42,5 +42,15 @@ stats/
 ## Presentations
 presentations/
 
+## Temporary test files
+/test_*.rb
+/test_*.sh
+
+## Generated static HTML output (created by 'showoff static')
+/static/
+
+## Test validation artifacts (generated during test runs)
+/build/validation/
+
 # AI
 .opencode

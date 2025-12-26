@@ -553,9 +553,10 @@ end
         @baseurl = '../' * section.split('/').count if section
       end
 
-      # Initialize empty arrays for CSS and JS files (required by onepage.erb)
-      @css_files = []
-      @js_files = []
+      # Get CSS and JS files from presentation config (required by onepage.erb)
+      # Prefix custom CSS/JS files with 'file/' to use the file serving route
+      @css_files = (Showoff::Config.get('styles') || []).map { |f| "file/#{f}" }
+      @js_files = (Showoff::Config.get('scripts') || []).map { |f| "file/#{f}" }
 
       # Render the onepage template
       content_type 'text/html'

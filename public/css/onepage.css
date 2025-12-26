@@ -29,7 +29,7 @@
       /* Allow slides to expand for notes content, but no overflow clipping */
       border: none;
       position: relative;
-      page-break-after: always
+      page-break-after: always;
   }
 }
 

@@ -204,8 +204,34 @@ EOF
     end
   end
 
-  # I don't actually know precisely what this routine does yet.....
-  it "correctly munges commandline blocks"
+  # Commandline blocks inside elements with class 'commandline' should be split
+  # into separate code elements for command input and result output.
+  it "correctly munges commandline blocks" do
+    content = <<~EOF
+<div class="commandline">
+<pre><code>$ echo hello
+hello
+# whoami
+root
+# exit</code></pre>
+</div>
+EOF
+    doc = Nokogiri::HTML::DocumentFragment.parse(content)
+
+    Showoff::Compiler::Fixups.updateCommandlineBlocks!(doc)
+
+    # Collect only element nodes, and drop empty result nodes that may be added for trailing whitespace
+    nodes = doc.search('.commandline pre code').children.reject(&:text?).reject { |n| n['class'] == 'result' && n.text.strip.empty? }
+    texts = nodes.map { |n| n.text.strip }
+    classes = nodes.map { |n| n['class'] }
+
+    # Expect at least two command/result pairs in order
+    expect(classes[0,4]).to eq(['command', 'result', 'command', 'result'])
+    expect(texts[0]).to eq('$ echo hello')
+    expect(texts[1]).to eq('hello')
+    expect(texts[2]).to eq('# whoami')
+    expect(texts[3]).to eq('root')
+  end
 
 end
 

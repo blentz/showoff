@@ -713,17 +713,26 @@ RSpec.describe Showoff::Server::WebSocketManager do
       expect(manager.connection_count).to eq(0)
     end
 
-  # Skipped: RSpec's any_instance_of(Proc) is not thread-safe and causes deadlocks
-  # This is an RSpec mocking limitation, not a bug in our code
-  xit 'concurrent message routing' do
+  it 'concurrent message routing' do
     ws = MockWebSocket.new
     allow(session_state).to receive(:valid_presenter_cookie?).and_return(true)
     manager.add_connection(ws, 'cp', 's')
     manager.handle_message(ws, { 'message' => 'register' }.to_json, request_context)
     MockEM.run_pending_ticks
 
-    # Allow any calls to current_slide_callback
-    allow_any_instance_of(Proc).to receive(:call).with(:set, any_args).and_return(nil)
+    # Provide a thread-safe current_slide_callback to avoid Proc stubbing
+    mutex = Mutex.new
+    safe_callback = lambda do |action, value = nil|
+      mutex.synchronize do
+        case action
+        when :get
+          current_slide_store
+        when :set
+          current_slide_store.merge!(value || {})
+        end
+      end
+    end
+    manager.instance_variable_set(:@current_slide_callback, safe_callback)
 
     threads = []
     50.times do |i|

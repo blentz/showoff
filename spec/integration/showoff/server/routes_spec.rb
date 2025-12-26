@@ -180,8 +180,7 @@ RSpec.describe 'Showoff::Server Routes', type: :request do
   end
 
   describe 'GET /health' do
-    # Temporarily disable this test until title accessor is implemented
-    xit 'returns JSON with ok status and presentation title' do
+    it 'returns JSON with ok status and presentation title' do
       get '/health'
       expect(last_response.status).to eq(200)
       expect(last_response.headers['Content-Type']).to include('application/json')

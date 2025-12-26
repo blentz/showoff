@@ -29,7 +29,7 @@ describe 'Showoff::Server execute route security' do
         expect(execution_manager).to receive(:execute).with('ruby', malicious_code)
           .and_return('Command contained potentially malicious content')
 
-        get '/execute/ruby', path: 'test/slide', index: '0'
+        get '/execute/ruby', { path: 'test/slide', index: '0' }, { 'HTTP_HOST' => 'localhost' }
         expect(last_response).to be_ok
       end
 

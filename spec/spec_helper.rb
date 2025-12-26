@@ -14,13 +14,38 @@
 #
 # See http://rubydoc.info/gems/rspec-core/RSpec/Core/Configuration
 
+# Enable SimpleCov coverage reporting
+begin
+  require 'simplecov'
+  SimpleCov.start do
+    enable_coverage :branch
+    add_filter '/spec/'
+    add_group 'Lib', 'lib'
+  end
+  SimpleCov.minimum_coverage 90
+rescue LoadError
+  warn 'SimpleCov not available; coverage will not be reported.'
+end
+
 require 'showoff/version'
 require 'showoff_ng'
+
+# Load custom middleware for disabling host authorization in tests
+require_relative 'support/disable_host_authorization'
 
 # helper method to return the base path of the fixtures directory
 def fixtures
   File.expand_path(File.join(File.dirname(__FILE__), 'fixtures'))
 end
+
+# Configure Sinatra 4.x host_authorization for test environment
+# Allow all hosts in tests to avoid "Host not permitted" errors
+require 'showoff/server'
+require 'ipaddr'
+require 'rack/test'
+
+# Apply the host authorization fixes
+HostAuthorizationTestFixes.apply!
 
 RSpec.configure do |config|
   # rspec-expectations config goes here. You can use an alternate
@@ -52,6 +77,14 @@ RSpec.configure do |config|
   # inherited by the metadata hash of host groups and examples, rather than
   # triggering implicit auto-inclusion in groups with matching metadata.
   config.shared_context_metadata_behavior = :apply_to_host_groups
+
+  # Include Rack::Test::Methods in all specs that use Sinatra
+  config.include Rack::Test::Methods, file_path: %r{spec/integration/showoff/server}
+
+  # Before each test that uses Rack::Test, ensure the Host header is set
+  config.before(:each, file_path: %r{spec/integration/showoff/server}) do
+    header 'Host', 'localhost'
+  end
 
 # The settings below are suggested to provide a good initial experience
 # with RSpec, but feel free to customize to your heart's content.

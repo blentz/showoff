@@ -543,6 +543,11 @@ end
       # Generate slides HTML with options for print view
       @slides = get_slides_html(static: true, toc: true, print: true, section: section)
 
+      # Filter notes sections based on the section parameter
+      # If section is nil, remove ALL notes sections (slides only)
+      # If section is 'notes' or 'handouts', keep only matching sections
+      @slides = filter_notes_sections(@slides, section)
+
       # Set baseurl for relative paths if section is provided
       unless params[:munged]
         @baseurl = '../' * section.split('/').count if section
@@ -789,6 +794,29 @@ end
 
     # Generate slides from presentation
     @presentation.slides
+  end
+
+  # Helper method to filter notes sections for print output
+  # @param html [String] The HTML containing slides with notes sections
+  # @param section [String, nil] The section to keep ('notes', 'handouts', or nil for no notes)
+  # @return [String] The filtered HTML
+  def filter_notes_sections(html, section)
+    return html if html.nil? || html.empty?
+
+    doc = Nokogiri::HTML.fragment(html)
+
+    if section.nil?
+      # Remove ALL notes sections when printing slides only
+      doc.css('div.notes-section').each { |n| n.remove }
+    else
+      # Keep only the requested section type, remove others
+      doc.css('div.notes-section').each do |note|
+        classes = note.attr('class').split
+        note.remove unless classes.include?(section)
+      end
+    end
+
+    doc.to_html
   end
 
   # WebSocket endpoint for real-time presenter/audience sync

@@ -62,12 +62,12 @@ class Showoff::Compiler::Notes
       end
     end
 
-    # return notes separately from content so that it can be rendered outside the slide
-    # @see https://github.com/puppetlabs/showoff/blob/3f43754c84f97be4284bb34f9bc7c42175d45226/lib/showoff.rb#L726-L732
-    notes = doc.search('div.notes-section')
-    doc.search('div.notes-section').each {|n| n.remove }
-
-    [doc, notes]
+    # Notes remain in the slide HTML.
+    # They are hidden by CSS (.notes-section { display: none }) in regular views
+    # and shown in print views (@media print { .notes-section { display: block } })
+    #
+    # For print filtering (e.g., /print vs /print/notes), see the print route handler
+    doc
   end
 
 end

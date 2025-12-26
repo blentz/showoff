@@ -95,12 +95,15 @@ class Showoff::Compiler
     Glossary.render!(doc)
     Downloads.scanForFiles!(doc, @options)
 
-    # This call must be last in the chain because it separates notes from the
-    # content and returns them separately. If it's not last, then the notes
-    # won't have all the compilation steps applied to them.
+    # This call must be last in the chain.
+    # Notes remain in the HTML, hidden by CSS in regular views and shown in print views.
     #
     # must pass in extra context because this will render markdown itself
-    Notes.render!(doc, @profile, @options)
+    doc = Notes.render!(doc, @profile, @options)
+
+    # Return both the document and an empty notes array (notes are embedded in doc now)
+    # The slide template expects this tuple format
+    [doc, []]
   end
 
 end

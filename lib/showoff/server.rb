@@ -530,8 +530,8 @@ end
   SHARED_FILES_SLIDE_NUM = -999
 
   # GET /print route - renders the entire presentation with page breaks for printing
-  # Matches both /print and /print/section
-  get %r{/print(?:/([^/]+))?} do |section|
+  # Matches /print, /print/, and /print/section
+  get %r{/print(?:/([^/]+)?)?} do |section|
     begin
       # Set locale from cookies
       @locale = locale(request.cookies['locale'])

@@ -74,7 +74,9 @@ class Showoff::Compiler::Fixups
             lines = out.split("\n")
             lang  = lines.shift.gsub('@@@', '').strip
             pre.set_attribute('class', 'highlight')
-            code.set_attribute('class', 'language-' + lang.downcase) if !lang.empty?
+            # Mermaid diagrams use 'render-diagram' class for historical reasons
+            lang_class = (lang.downcase == 'mermaid') ? 'render-diagram' : lang.downcase
+            code.set_attribute('class', 'language-' + lang_class) if !lang.empty?
             code.content = lines.join("\n")
           end
 

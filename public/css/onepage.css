@@ -29,7 +29,14 @@
       /* Allow slides to expand for notes content, but no overflow clipping */
       border: none;
       position: relative;
+      /* Legacy page break properties for older browsers */
+      page-break-before: auto;
       page-break-after: always;
+      page-break-inside: avoid;
+      /* Modern CSS fragmentation properties */
+      break-before: auto;
+      break-after: page;
+      break-inside: avoid;
   }
 }
 

@@ -8,7 +8,7 @@
 <div id="<%= id %>" class="slide <%= slideClasses.join(' ') %>" style="<%= bgstyle %>"
       data-section="<%= section %>" data-title="<%= name %>" data-transition="<%= transition %>" >
   <div class="content <%= classes.join(' ') %>" ref="<%= ref %>">
-    <% if section_title -%>
+    <% if section_title && section_title != section -%>
       <!-- renderers like wkhtmltopdf need an <h1> tag to use for a section title -->
       <h1 class="section_title"><%= section_title %></h1>
     <% end -%>

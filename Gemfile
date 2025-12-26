@@ -15,6 +15,7 @@ group :test do
   gem 'rake'
   gem 'rspec'
   gem 'pry'
+  gem 'simplecov', require: false
 end
 
 group :development, :test do

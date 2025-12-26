@@ -9,7 +9,7 @@
 # Access the presentation at http://localhost:54321
 # Access the presenter view at http://localhost:54321/presenter
 
-FROM ruby:3.2-alpine
+FROM ruby:3.3-alpine
 
 # Build dependencies for native gem extensions
 # - build-base: gcc, make, etc.

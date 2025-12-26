@@ -13,28 +13,31 @@ Gem::Specification.new do |s|
   s.authors           = ["Scott Chacon","Ben Ford"]
   s.require_path      = "lib"
   s.executables       = %w( showoff )
+  s.required_ruby_version = ">= 3.1.0" # Required for nokogiri >= 1.18.9 security fixes
   s.files             = %w( README.md Rakefile LICENSE )
   s.files            += Dir.glob("lib/**/*")
   s.files            += Dir.glob("bin/**/*")
   s.files            += Dir.glob("views/**/*")
   s.files            += Dir.glob("public/**/*")
   s.files            += Dir.glob("locales/**/*")
-  s.add_dependency      "commonmarker",      "~> 0.21"
-  s.add_dependency      "fidget",            "~> 0.0"
+  s.add_dependency      "commonmarker",      "~> 0.23" # TODO: Migrate to 2.x (breaking API changes)
+
   s.add_dependency      "gli",               "~> 2.20"
-  s.add_dependency      "htmlentities",      "~> 4.3"
-  s.add_dependency      "i18n",              "~> 1.8"
+  s.add_dependency      "htmlentities",      "~> 4.4"
+  s.add_dependency      "i18n",              "~> 1.14" # Latest stable
   s.add_dependency      "iso-639",           "~> 0.3"
-  s.add_dependency      "json",              "~> 2.5"
-  # Updated minimum to ensure platform builds (aarch64) and security fixes
-  # Allow latest stable without upper bound to avoid artificial pinning
-  s.add_dependency      "nokogiri",          ">= 1.13.10"
+  s.add_dependency      "json",              "~> 2.7"
+  # Security: Updated to resolve multiple CVEs
+  # nokogiri >= 1.18.9 for libxml2/libxslt CVE fixes (requires Ruby >= 3.1.0)
+  # sinatra >= 4.2.0 for CVE-2024-21510, CVE-2025-61921 fixes (requires Ruby >= 2.7.8)
+  s.add_dependency      "nokogiri",          ">= 1.18.9"
   s.add_dependency      "parslet",           "~> 2.0"
   s.add_dependency      "rack-contrib",      "~> 2.3"
   s.add_dependency      "redcarpet",         "~> 3.5"
-  s.add_dependency      "sinatra",           "~> 2.1"
-  s.add_dependency      "sinatra-websocket", "~> 0.3"
-  s.add_dependency      "tilt",              "~> 2.0"
+  s.add_dependency      "sinatra",           "~> 4.2"
+  s.add_dependency      "rackup",            "~> 2.1" # Required by Sinatra 4.x
+  s.add_dependency      "faye-websocket",    "~> 0.12"
+  s.add_dependency      "tilt",              "~> 2.6" # Latest stable
 
   s.add_development_dependency "mg",         "~> 0.0"
   s.description       = <<-desc

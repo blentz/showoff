@@ -1,0 +1,109 @@
+= Test Validation Report - v0.24.0
+
+Date: 2025-12-24
+Environment: macOS (darwin) + Podman
+Repository: /Users/blentz/git/showoff
+
+== Summary
+* Refactor validation completed across containers, specs, and smoke tests
+* All RSpec specs pass (0 failures), with 4 pending examples (expected)
+* Test container builds cleanly; production container builds but serve/static require follow-up
+
+== Test Suite Results
+* RSpec Examples: 507
+* Failures: 0
+* Pending: 4
+* Duration (container run): ~0.34 seconds (cold start not included)
+
+== Component Tests
+* Server unit managers: PASS (CacheManager, DownloadManager, ExecutionManager, FeedbackManager, FormManager, SessionState, StatsManager, WebSocketManager)
+* WebSocket: PASS (unit + integration)
+* Feedback: PASS (unit)
+* Integration: PASS (all routes) [1 pending: /health]
+
+== Container Build
+* Test image (Containerfile.test): SUCCESS
+  * Default CMD runs full RSpec (documentation format)
+* Production image (Containerfile): SUCCESS
+  * Entrypoint: showoff
+  * Exposed port: 54321
+
+== CLI Commands (containerized)
+* showoff help: PASS
+* showoff info: PASS (example dir mounted)
+* showoff validate: PASS (example)
+* showoff serve: PARTIAL/FAIL (container exits; CLI uses ServerAdapter#run! instance path)
+* showoff static: FAIL (undefined method []/Nil; static path requires follow-up)
+* showoff heroku: NOT RUN (skipped due to serve failure coupling)
+
+Notes
+* Serve failure root cause: CLI ServerAdapter calls instance run!; modular Sinatra expects class run!. Implemented instance-level run! wrapper in Showoff::Server, but the CLI still reported undefined method. Needs end-to-end verification in the production image wiring.
+* Static failure root cause: likely configuration defaults in showoff_ng + Config.load assumptions when no/partial config; unit and integration tests do not cover static CLI path. Needs targeted fix.
+
+== Syntax Validation
+* Ruby syntax: ALL VALID (lib/, bin/)
+
+== Dependency Check
+* Requires (container):
+  * require 'showoff_ng' OK
+  * require 'showoff/server' OK (within test suite; manual require requires Showoff constant present)
+  * require 'showoff/compiler' OK
+* bundle outdated (informational): several gems have newer versions (rack, sinatra, nokogiri, etc.)
+
+== Performance (Baseline)
+* Skipped automated timings due to serve regression on production image and occupied host port. Integration tests exercised endpoints successfully within containerized RSpec.
+
+== Memory Leak Check (Smoke)
+* Skipped (depends on live server run loop). No anomalous allocation growth observed during test suite execution.
+
+== Security Audit
+* bundler-audit: not executed (plugin not present in Gemfile; installation path not on PATH inside test container)
+* Code review for dangerous calls (eval/system/exec/backticks):
+  * Backticks used for OS open (editor) and git operations (showoff_utils.rb)
+  * system('git', ...) used for repository updates/gh-pages publishing
+  * All usages are internal, not directly from unvalidated user input in HTTP handlers
+  * Recommendation: gate OS calls behind safe lists and sanitize any path/user-provided inputs
+
+== Documentation Validation
+* Documentation references to lib/showoff/* verified present post-refactor (non-archive docs). No broken major references observed.
+
+== Gemspec Validation
+* Built gem inside test image: SUCCESS (showoff-0.23.0.gem)
+* Local install in test image: SUCCESS (executable PATH resolution differed in that environment)
+* showoff help: PASS in production image
+
+== Changes Made During Validation
+* Fixed JSON routes bug in Showoff::Server (/form aggregate), moved stray content_type into route, balanced end blocks
+* Added missing class end to Showoff::Server
+* Guarded logger calls with safe navigation (logger&.) across routes and WebSocket paths
+* Allowed config loading fallback in Server.initialize (missing/invalid showoff.json) to enable route rendering in tests
+* Adjusted integration specs to use existing fixtures ('slides' instead of missing 'simple')
+* WebSocket feedback handler: added robust fallback when Sinatra settings are unavailable or incomplete (legacy stats/feedback.json path)
+* Defined Showoff constant before requiring nested classes to avoid require-order NameError
+* Added instance-level run! (compat shim) to Showoff::Server (needs verification with CLI)
+
+== Outstanding Issues (to be tracked)
+1) CLI serve (containerized) exits immediately with "undefined method run! for #<Showoff::Server>" despite instance wrapper
+   * Severity: Blocker for containerized serve
+   * Hypothesis: Production image may not be loading updated class definition/order or ServerAdapter path still conflicting
+   * Next steps: Verify ServerAdapter invocation path in bin/showoff; adjust to call Showoff::Server.run! or ensure instance wrapper loaded before adapter
+
+2) CLI static fails (undefined method []/Nil)
+   * Severity: Major
+   * Hypothesis: showoff_ng expects fully populated Config.get keys (pdf_options, sections) and does not handle minimal/empty configs gracefully
+   * Next steps: Harden showoff_ng.do_static to handle missing keys; ensure Showoff::Presentation/static path returns required assets/sections for example presentation
+
+3) Security audit automation not wired via bundler plugin
+   * Severity: Minor
+   * Action: Add bundler-audit to Gemfile (test/dev), wire CI job
+
+4) Production serve port mapping/health endpoints
+   * Confirm that /health exists (integration test covers route but needs production wiring)
+
+== Conclusion
+* Test containers: PASS (build + full RSpec: 507 examples, 0 failures, 4 pending)
+* Integration endpoints: PASS in test environment
+* Production container: BUILDS, but serve/static require follow-up before release
+* Syntax: PASS; Basic security and docs checks show no critical issues
+
+Overall assessment: Good test health for refactored code. Two CLI regressions remain (serve adapter wiring and static path). Recommend fixing these before release tag v0.24.0.

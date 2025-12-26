@@ -1,0 +1,226 @@
+= Showoff Container Guide
+
+== Overview
+
+Showoff provides multiple container configurations for different use cases:
+
+[Containerfile] Development container built from local source code
+[build/Containerfile] Production container using published gem from RubyGems
+[Containerfile.test] Test container for running RSpec test suite
+
+== Which Container Should I Use?
+
+=== For Running Presentations (Production)
+
+Use the published Docker image from Docker Hub:
+
+  docker pull binford2k/showoff
+  docker run -p 9090:9090 -v /path/to/presentation:/var/cache/showoff binford2k/showoff
+
+Or build from +build/Containerfile+:
+
+  docker build -t showoff-gem -f build/Containerfile .
+  docker run -p 9090:9090 -v /path/to/presentation:/var/cache/showoff showoff-gem
+
+*Characteristics:*
+* Installs published showoff gem from RubyGems
+* Minimal image size (~200MB)
+* Ruby 3.3 Alpine base
+* Production-ready (no dev/test dependencies)
+
+=== For Development (Local Source)
+
+Use +Containerfile+ to build from your local source code:
+
+  podman build -t showoff-local -f Containerfile .
+  podman run -p 54321:54321 -v /path/to/presentation:/presentation:Z showoff-local
+
+*Characteristics:*
+* Builds from local source (your working directory)
+* Includes your uncommitted changes
+* Uses port 54321 (different from production)
+* Excludes dev/test gems (production-like)
+* Ideal for testing changes before publishing
+
+=== For Testing (RSpec)
+
+Use +Containerfile.test+ to run the test suite:
+
+  podman build -t showoff:test -f Containerfile.test .
+  podman run --rm showoff:test
+
+Run specific tests:
+
+  podman run --rm showoff:test bundle exec rspec spec/unit/showoff/server/
+
+*Characteristics:*
+* Includes ALL gems (development, test, production)
+* Keeps build dependencies for native extensions
+* Default command runs full RSpec suite
+* Ruby 3.3 Alpine base
+
+== Container Comparison
+
+  Feature                  | build/Containerfile | Containerfile    | Containerfile.test
+  -------------------------|------------------|------------------|-------------------
+  Source                   | RubyGems gem     | Local source     | Local source
+  Base Image               | ruby:3.3-alpine  | ruby:3.3-alpine  | ruby:3.3-alpine
+  Development Gems         | No               | No               | Yes
+  Test Gems                | No               | No               | Yes
+  Default Port             | 9090             | 54321            | N/A
+  Default Command          | serve            | serve            | rspec
+  Build Dependencies       | Removed          | Removed          | Kept
+  Image Size (approx)      | 200MB            | 250MB            | 350MB
+  Use Case                 | Production       | Development      | Testing
+
+== Building Images
+
+=== Production Image (Docker Hub)
+
+The +build/Containerfile+ is used for publishing to Docker Hub:
+
+  # Via Rakefile (recommended)
+  rake docker              # Build image
+  rake docker:push         # Build and push to Docker Hub
+
+  # Manual build
+  cd build
+  docker build -t binford2k/showoff:VERSION -t binford2k/showoff:latest .
+  docker push binford2k/showoff:VERSION
+  docker push binford2k/showoff:latest
+
+=== Development Image
+
+  podman build -t showoff-local -f Containerfile .
+
+=== Test Image
+
+  podman build -t showoff:test -f Containerfile.test .
+
+== Common Tasks
+
+=== Run Presentation
+
+  # Production image
+  docker run -p 9090:9090 -v $(pwd):/var/cache/showoff binford2k/showoff
+
+  # Development image
+  podman run -p 54321:54321 -v $(pwd):/presentation:Z showoff-local
+
+=== Access Presenter View
+
+  # Production (port 9090)
+  http://localhost:9090/presenter
+
+  # Development (port 54321)
+  http://localhost:54321/presenter
+
+=== Run Tests in Container
+
+  # Full test suite
+  podman run --rm showoff:test
+
+  # Specific test file
+  podman run --rm showoff:test bundle exec rspec spec/unit/showoff/server/cache_manager_spec.rb
+
+  # Interactive shell for debugging
+  podman run --rm -it --entrypoint=/bin/sh showoff:test
+
+=== Enable Code Execution
+
+Production:
+
+  docker run -p 9090:9090 -v $(pwd):/var/cache/showoff binford2k/showoff -x
+
+Development:
+
+  podman run -p 54321:54321 -v $(pwd):/presentation:Z showoff-local serve -x --host 0.0.0.0 --port 54321
+
+== Security Considerations
+
+=== Running as Non-Root
+
+Both production and development containers run as root by default. For enhanced security, you can run as a non-root user:
+
+  docker run --user 1000:1000 -p 9090:9090 -v $(pwd):/var/cache/showoff binford2k/showoff
+
+=== Code Execution (-x flag)
+
+The +-x+ flag enables executing code from slides. Only use this with trusted presentations:
+
+* Code runs in the container
+* Limited by container permissions
+* Can access mounted presentation directory
+* Use read-only mounts for untrusted content: +-v $(pwd):/var/cache/showoff:ro+
+
+=== Network Exposure
+
+* Production container exposes port 9090
+* Development container exposes port 54321
+* Both bind to +0.0.0.0+ by default
+* Use +--host localhost+ to restrict to local access
+
+== Troubleshooting
+
+=== Image Won't Build
+
+Check Docker/Podman version:
+
+  docker --version   # Should be >= 20.10
+  podman --version   # Should be >= 3.0
+
+Clear build cache:
+
+  docker build --no-cache -f build/Containerfile .
+
+=== Container Exits Immediately
+
+Check logs:
+
+  docker logs CONTAINER_ID
+
+Verify presentation directory is mounted:
+
+  docker run -v $(pwd):/var/cache/showoff binford2k/showoff static
+
+=== Tests Fail in Container
+
+Mount local source for debugging:
+
+  podman run --rm -v $(pwd):/showoff:Z -w /showoff showoff:test bundle exec rspec spec/
+
+== Advanced Usage
+
+=== Custom Base Image
+
+Create your own Dockerfile based on +build/Containerfile+ or +Containerfile+:
+
+  FROM binford2k/showoff:latest
+  RUN apk add --no-cache python3 perl
+  CMD ["showoff", "serve", "-x"]
+
+=== Multi-Stage Build
+
+For minimal image size, use multi-stage builds:
+
+  FROM ruby:3.3-alpine AS builder
+  # ... build steps ...
+
+  FROM ruby:3.3-alpine
+  COPY --from=builder /usr/local/bundle /usr/local/bundle
+  # ... runtime only ...
+
+=== CI/CD Integration
+
+Example GitHub Actions workflow:
+
+  - name: Build and test
+    run: |
+      podman build -t showoff:test -f Containerfile.test .
+      podman run --rm showoff:test
+
+== References
+
+* Containerfile syntax: https://docs.docker.com/engine/reference/builder/
+* Podman documentation: https://docs.podman.io/
+* Docker Hub image: https://hub.docker.com/r/binford2k/showoff

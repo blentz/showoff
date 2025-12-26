@@ -41,6 +41,9 @@
   <% end %>
 
   <script type="text/javascript">
+    // Initialize mermaid before document ready
+    mermaid.initialize({startOnLoad:false});
+
     $(document).ready(function() {
       $('pre.highlight code').each(function(i, block) {
         try {

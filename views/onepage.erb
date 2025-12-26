@@ -41,9 +41,6 @@
   <% end %>
 
   <script type="text/javascript">
-    // Initialize mermaid with configuration
-    mermaid.initialize({ startOnLoad: false });
-
     $(document).ready(function() {
       $('pre.highlight code').each(function(i, block) {
         try {
@@ -61,14 +58,7 @@
 
 
       // render diagrams and text manipulations unconditionally instead of waiting for slide views
-      // Mermaid diagrams are in <code class="language-mermaid"> elements
-      // Extract the text, create a div, and let mermaid render it
-      $('code.language-mermaid').each(function() {
-        var code = $(this).text();
-        var div = $('<div class="mermaid">').text(code);
-        $(this).parent().replaceWith(div);
-      });
-      mermaid.init(undefined, $(".mermaid"));
+      mermaid.init(undefined, $(".language-render-diagram"));
       $('.content.bigtext').bigtext();
 
       // translate SVG images, inlining them first if needed.

@@ -11,17 +11,17 @@
   <% end %>
 
   <% if @inline %>
-    <%= inline_css(['font-awesome-5.6.1/css/all.min.css', 'mermaid-6.0.0.css', "highlight/#{@highlightStyle}.css"], 'public/css') %>
+    <%= inline_css(['font-awesome-5.6.1/css/all.min.css', "highlight/#{@highlightStyle}.css"], 'public/css') %>
     <%= inline_css(['showoff.css', 'onepage.css'], 'public/css') %>
     <%= inline_css(css_files) %>
 
     <%= inline_js(['jquery-2.1.4.min.js', 'showoff.js', 'highlight.pack-9.15.10.js', 'highlightjs-line-numbers.min.js'], 'public/js') %>
-    <%= inline_js(['bigtext-0.1.8.js', 'simpleStrings-0.0.1.js', 'mermaid-6.0.0-min.js'], 'public/js') %>
+    <%= inline_js(['bigtext-0.1.8.js', 'simpleStrings-0.0.1.js', 'mermaid-11.12.2.min.js'], 'public/js') %>
 
     <%= inline_js(js_files) %>
 
   <% else %>
-    <% ['font-awesome-5.6.1/css/all.min.css', 'mermaid-6.0.0.css', "highlight/#{@highlightStyle}.css",
+    <% ['font-awesome-5.6.1/css/all.min.css', "highlight/#{@highlightStyle}.css",
         'showoff.css', 'onepage.css'].each do |css_file| %>
       <link rel="stylesheet" href="css/<%= css_file %>" type="text/css"/>
     <% end %>
@@ -31,7 +31,7 @@
     <% end %>
 
     <% ['jquery-2.1.4.min.js', 'showoff.js', 'highlight.pack-9.15.10.js',
-        'highlightjs-line-numbers.min.js', 'bigtext-0.1.8.js', 'simpleStrings-0.0.1.js', 'mermaid-6.0.0-min.js'].each do |js_file| %>
+        'highlightjs-line-numbers.min.js', 'bigtext-0.1.8.js', 'simpleStrings-0.0.1.js', 'mermaid-11.12.2.min.js'].each do |js_file| %>
       <script type="text/javascript" src="js/<%= js_file %>"></script>
     <% end %>
     <% js_files.each do |js_file| %>
@@ -42,10 +42,20 @@
 
   <script type="text/javascript">
     // Initialize mermaid before document ready
+    console.log('[MERMAID DEBUG] Initializing mermaid library');
     mermaid.initialize({startOnLoad:false});
 
     $(document).ready(function() {
+      console.log('[MERMAID DEBUG] Document ready fired');
+      console.log('[MERMAID DEBUG] code.language-render-diagram count:', $('code.language-render-diagram').length);
+
       $('pre.highlight code').each(function(i, block) {
+        // Skip syntax highlighting for mermaid diagrams - they need special handling
+        if ($(block).hasClass('language-render-diagram')) {
+          console.log('[MERMAID DEBUG] Skipping syntax highlighting for mermaid diagram');
+          return;
+        }
+
         try {
           // syntax highlight the code
           hljs.highlightBlock(block);
@@ -59,15 +69,20 @@
         }
       });
 
+      console.log('[MERMAID DEBUG] After syntax highlighting, code.language-render-diagram count:', $('code.language-render-diagram').length);
 
       // render diagrams and text manipulations unconditionally instead of waiting for slide views
       // Mermaid needs the code in a div, not in <pre><code>, so transform the DOM first
       $('code.language-render-diagram').each(function() {
+        console.log('[MERMAID DEBUG] Transforming code element to div');
         var code = $(this).text();
+        console.log('[MERMAID DEBUG] Code content length:', code.length);
         var div = $('<div class="mermaid">').text(code);
         $(this).parent().replaceWith(div);
       });
+      console.log('[MERMAID DEBUG] After transformation, div.mermaid count:', $('div.mermaid').length);
       mermaid.init(undefined, $("div.mermaid"));
+      console.log('[MERMAID DEBUG] mermaid.init() called');
       $('.content.bigtext').bigtext();
 
       // translate SVG images, inlining them first if needed.

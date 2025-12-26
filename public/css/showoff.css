@@ -80,6 +80,12 @@ pre code {
     position: relative;
   }
 
+  .slide .content {
+    padding: 20px;
+    box-sizing: border-box;
+    max-height: 100%;
+  }
+
   .slide {
     font-size: 1.5em;
   }
@@ -647,6 +653,22 @@ pre.highlight tr:not(:last-child) {
 .language-render-diagram .node text,
 .language-render-diagram div.mermaidTooltip {
   font-family: "Lucida Sans Unicode", "Lucida Grande", sans-serif;
+}
+
+/* Mermaid diagram container sizing - fit SVG to container */
+div.mermaid {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  max-height: 600px;
+  margin: 10px 0;
+}
+
+div.mermaid svg {
+  max-width: calc(100% - 40px);
+  max-height: 550px;
+  height: auto !important;
+  width: auto !important;
 }
 
 

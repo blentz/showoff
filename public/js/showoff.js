@@ -221,6 +221,36 @@ function initializePresentation() {
 		timeout: 0
 	})
 
+  // Transform mermaid code blocks from <code> to <div> elements for rendering
+  // Mermaid requires content in <div class="mermaid"> not <pre><code>
+  // MUST happen before showSlide() is called
+  console.log('[MERMAID] Transforming code.language-render-diagram elements');
+  $('code.language-render-diagram').each(function() {
+    console.log('[MERMAID] Found code element, transforming to div');
+    var code = $(this).text();
+    var div = $('<div class="mermaid">').text(code);
+    $(this).parent().replaceWith(div);
+  });
+  console.log('[MERMAID] Transformation complete. div.mermaid count:', $('div.mermaid').length);
+
+  // initialize mermaid, but don't render yet since the slide sizes are indeterminate
+  mermaid.initialize({
+    startOnLoad: false,
+    flowchart: {
+      useMaxWidth: true,
+      htmlLabels: true,
+      curve: 'basis'
+    },
+    themeVariables: {
+      primaryColor: '#fff',
+      primaryTextColor: '#000',
+      primaryBorderColor: '#000',
+      lineColor: '#000',
+      secondaryColor: '#fff',
+      tertiaryColor: '#fff'
+    }
+  });
+
 	setupMenu();
 
 	if (slidesLoaded) {
@@ -287,9 +317,6 @@ function initializePresentation() {
 
   $('.slide.activity .activityToggle input.activity').checkboxradio();
   $('.slide.activity .activityToggle input.activity').change(toggleComplete);
-
-  // initialize mermaid, but don't render yet since the slide sizes are indeterminate
-  mermaid.initialize({startOnLoad:false});
 
   // translate SVG images, inlining them first if needed.
   $('img').simpleStrings({strings: user_translations});
@@ -960,7 +987,17 @@ function showSlide(back_step, updatepv) {
   currentSlide.children('.content.bigtext').bigtext();
 
   // render any diagrams on the slide
-  mermaid.init(undefined, currentSlide.find('code.language-render-diagram'));
+  var mermaidDivs = currentSlide.find('div.mermaid');
+  console.log('[MERMAID] showSlide: Found', mermaidDivs.length, 'div.mermaid elements in current slide');
+  if (mermaidDivs.length > 0) {
+    console.log('[MERMAID] showSlide: Calling mermaid.init() on', mermaidDivs.length, 'elements');
+    try {
+      mermaid.init(undefined, mermaidDivs);
+      console.log('[MERMAID] showSlide: mermaid.init() completed successfully');
+    } catch(e) {
+      console.error('[MERMAID] showSlide: mermaid.init() threw error:', e);
+    }
+  }
 
   return ret;
 }

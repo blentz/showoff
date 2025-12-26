@@ -11,6 +11,11 @@ class Showoff::Compiler::Variables
   # @see
   #     https://github.com/puppetlabs/showoff/blob/3f43754c84f97be4284bb34f9bc7c42175d45226/lib/showoff.rb#L557-L614
   def self.interpolate!(content)
+    # Check for nil content
+    if content.nil?
+      raise "Variables.interpolate! called with nil content"
+    end
+
     # update counters, incrementing section:minor if needed
     content.gsub!("~~~CURRENT_SLIDE~~~", Showoff::State.get(:slide_count).to_s)
     content.gsub!("~~~SECTION:MAJOR~~~", Showoff::State.get(:section_major).to_s)

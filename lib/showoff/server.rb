@@ -717,10 +717,11 @@ end
         system('git', 'pull')
       end
 
-      # In the future, this would call a method to generate slides
-      # For now, we'll return a placeholder that can be expanded later
-      # This is a transitional implementation during the refactoring process
-      content = "<div class='slides'>Placeholder slide content</div>"
+      # Generate slides HTML from presentation
+      # Must run in presentation directory for file paths to work
+      content = Dir.chdir(settings.pres_dir) do
+        @presentation.slides
+      end
 
       # Cache the content unless nocache is set
       cache.set(@locale, content) unless settings.respond_to?(:nocache) && settings.nocache
@@ -764,14 +765,12 @@ end
   end
 
   # Helper method to generate slides HTML
-  # This is a placeholder implementation that will be expanded later
   def get_slides_html(opts = {})
     # Log options if logger is available
     logger&.debug("Generating slides HTML with options: #{opts.inspect}")
 
-    # For now, return a placeholder that can be expanded later
-    # This is a transitional implementation during the refactoring process
-    "<div class='slides'>Placeholder slide content for #{opts[:print] ? 'print' : 'onepage'} view</div>"
+    # Generate slides from presentation
+    @presentation.slides
   end
 
   # WebSocket endpoint for real-time presenter/audience sync

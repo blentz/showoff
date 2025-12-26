@@ -206,8 +206,15 @@ end
     end
 
     # Helper for presenter cookie check
+    # Returns true if the request has a valid presenter cookie OR if we're currently in presenter mode
     def valid_presenter_cookie?
-      sessions.valid_presenter_cookie?(request.cookies['presenter'])
+      # Check if we have a valid presenter cookie in the request
+      return true if sessions.valid_presenter_cookie?(request.cookies['presenter'])
+
+      # Also return true if we're on the /presenter endpoint (we're setting the cookie now)
+      return true if request.path_info == '/presenter'
+
+      false
     end
 
     # Helper for key mappings
@@ -310,6 +317,17 @@ end
       @edit = settings.showoff_config['edit'] if @review
       @feedback = settings.showoff_config['feedback']
       @language = get_translations()
+
+      # Variables needed by header.erb - get from presentation
+      @highlightStyle = @presentation.highlightStyle
+      @keymap = @presentation.keymap
+      @keycode_dictionary = @presentation.keycode_dictionary
+      @keycode_shifted_keys = @presentation.keycode_shifted_keys
+
+      # Variables needed by presenter.erb
+      @slides = nil  # Slides loaded via JavaScript in presenter mode
+      @interactive = true
+      @static = false
 
       # Handle presenter cookies
       manage_client_cookies(true)

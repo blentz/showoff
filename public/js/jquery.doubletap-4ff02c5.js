@@ -40,10 +40,10 @@
   }
 
   var swipeEvents = function(elements) {
-    elements.bind('touchstart',  this.touchStart);
-    elements.bind('touchmove',   this.touchMove);
-    elements.bind('touchcancel', this.touchCancel);
-    elements.bind('touchend',    this.touchEnd);
+    elements.on('touchstart',  this.touchStart);
+    elements.on('touchmove',   this.touchMove);
+    elements.on('touchcancel', this.touchCancel);
+    elements.on('touchend',    this.touchEnd);
   }
 
   swipeEvents.prototype.touchStart = function(evt) {
@@ -100,7 +100,7 @@
   //   doubletap
   $.fn.addSwipeEvents = function(callback) {
     new swipeEvents(this);
-    if(callback) this.bind('touch', callback)
+    if(callback) this.on('touch', callback)
     return this;
   }
 })(jQuery);

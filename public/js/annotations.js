@@ -210,23 +210,23 @@ jQuery.fn.extend({
       // This means that clicking links or copying text will not work.
       $(this).css('pointer-events', 'auto');
 
-      $(this).unbind( "mousedown" );
+      $(this).off( "mousedown" );
       $(this).mousedown(function(e){
         painting = true;
         annotations.click(e.offsetX, e.offsetY)
       });
 
-      $(this).unbind( "mouseup" );
+      $(this).off( "mouseup" );
       $(this).mouseup(function(e){
         painting = false;
       });
 
-      $(this).unbind( "mouseleave" );
+      $(this).off( "mouseleave" );
       $(this).mouseleave(function(e){
         painting = false;
       });
 
-      $(this).unbind( "mouseleave" );
+      $(this).off( "mouseleave" );
       $(this).mousemove(function(e){
         if(painting){
             annotations.draw(e.offsetX, e.offsetY);
@@ -242,10 +242,10 @@ jQuery.fn.extend({
       // Ignore pointer events again to make the overlay inactive.
       $(this).css('pointer-events', 'none');
 
-      $(this).unbind( "mousedown" );
-      $(this).unbind( "mouseup" );
-      $(this).unbind( "mouseleave" );
-      $(this).unbind( "mouseleave" );
+      $(this).off( "mousedown" );
+      $(this).off( "mouseup" );
+      $(this).off( "mouseleave" );
+      $(this).off( "mouseleave" );
     });
   },
   annotationListener: function (settings) {

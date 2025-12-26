@@ -12,7 +12,7 @@ $(document).ready(function(){
   mode = { track: true, follow: true, update: true, slave: false, notes: false, annotations: false, layout: 'default'};
 
   // the presenter window doesn't need the reload on resize bit
-  $(window).unbind('resize');
+  $(window).off('resize');
 
   $("#startTimer").click(    function() { startTimer()    });
   $("#pauseTimer").click(    function() { toggleTimer()   });
@@ -73,12 +73,12 @@ $(document).ready(function(){
 
   // Bind events for mobile viewing
   if( mobile() ) {
-    $('#preso').unbind('tap').unbind('swipeleft').unbind('swiperight');
+    $('#preso').off('tap').off('swipeleft').off('swiperight');
 
     $('#preso').addSwipeEvents().
-      bind('tap', presNextStep).        // next
-      bind('swipeleft', presNextStep).  // next
-      bind('swiperight', presPrevStep); // prev
+      on('tap', presNextStep).        // next
+      on('swipeleft', presNextStep).  // next
+      on('swiperight', presPrevStep); // prev
 
     $('#topbar #update').click( function(e) {
       e.preventDefault();
@@ -734,7 +734,7 @@ function postSlide() {
     var sections = getCurrentSections();
 
     var ul = $('.section-selector').empty();
-    if(sections.size() > 0) {
+    if(sections.length > 0) {
       sections.each( function (idx, value) {
         var li = $('<li>').prependTo(ul);
         var a  = $('<a/>')
@@ -749,7 +749,7 @@ function postSlide() {
     }
 
     var nextIndex = slidenum + 1;
-    var nextSlide = (nextIndex >= slides.size()) ? $('') : slides.eq(nextIndex);
+    var nextSlide = (nextIndex >= slides.length) ? $('') : slides.eq(nextIndex);
     var nextThumb = $('#nextSlide .container');
     var prevSlide = (slidenum > 0) ? slides.eq(slidenum - 1) : $('');
     var prevThumb = $('#prevSlide .container');

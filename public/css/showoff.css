@@ -1499,3 +1499,30 @@ h1.section_title {
 }
 
 /* end animations */
+
+/* Custom slide navigation (replaces jQuery Cycle) */
+#preso .slide {
+  display: none;
+}
+#preso .slide.slide-active {
+  display: block;
+}
+
+/* Transition effects */
+#preso.transition-fade .slide {
+  opacity: 0;
+  transition: opacity 0.5s ease;
+}
+#preso.transition-fade .slide.slide-active {
+  opacity: 1;
+}
+
+/* Mermaid diagram constraints */
+.mermaid {
+  max-height: 550px;
+  overflow: auto;
+}
+.mermaid svg {
+  max-height: 550px;
+  max-width: 100%;
+}

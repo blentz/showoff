@@ -150,7 +150,7 @@ end
   configure do
     set :views, File.join(File.dirname(__FILE__), '..', '..', 'views')
     set :public_folder, File.join(File.dirname(__FILE__), '..', '..', 'public')
-    set :server, 'thin'
+    set :server, 'puma'  # Modern Rack server with excellent WebSocket support
     set :pres_dir, nil  # Will be set in initialize
     set :showoff_config, {}  # Will be set in initialize
 
@@ -824,7 +824,8 @@ end
 def run!(options = {})
   # Use Rack directly to run the server
   require 'rack'
-  handler = Rack::Handler.pick(['thin'])
+  # Try puma first (modern, best WebSocket support), fallback to rackup default
+  handler = Rack::Handler.pick(['puma', 'rackup'])
   handler.run(self,
     Host: @options[:host] || 'localhost',
     Port: (@options[:port] || 9090).to_i

@@ -20,8 +20,9 @@ Gem::Specification.new do |s|
   s.files            += Dir.glob("views/**/*")
   s.files            += Dir.glob("public/**/*")
   s.files            += Dir.glob("locales/**/*")
-  s.add_dependency      "commonmarker",      "~> 0.23" # TODO: Migrate to 2.x (breaking API changes)
+  s.add_dependency      "commonmarker",      "~> 2.6"
 
+  s.add_dependency      "fidget",            "~> 0.0.6" # Prevent system sleep during presentations
   s.add_dependency      "gli",               "~> 2.20"
   s.add_dependency      "htmlentities",      "~> 4.4"
   s.add_dependency      "i18n",              "~> 1.14" # Latest stable
@@ -37,6 +38,7 @@ Gem::Specification.new do |s|
   s.add_dependency      "sinatra",           "~> 4.2"
   s.add_dependency      "rackup",            "~> 2.1" # Required by Sinatra 4.x
   s.add_dependency      "faye-websocket",    "~> 0.12"
+  s.add_dependency      "puma",              "~> 6.0" # Modern Rack web server
   s.add_dependency      "tilt",              "~> 2.6" # Latest stable
 
   s.add_development_dependency "mg",         "~> 0.0"

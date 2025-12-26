@@ -1,5 +1,5 @@
 require 'sinatra/base'
-require 'sinatra-websocket'
+require 'faye/websocket'
 require 'ostruct'
 
 # Ensure Showoff constant exists before requiring nested classes
@@ -776,44 +776,48 @@ end
     return nil unless settings.showoff_config[:interactive]
 
     # Require WebSocket upgrade
-    raise Sinatra::NotFound unless request.websocket?
+    raise Sinatra::NotFound unless Faye::WebSocket.websocket?(request.env)
 
-    request.websocket do |ws|
-      # On connection open
-      ws.onopen do
-        # Send current slide position to new client
-        current = websocket_manager.send(:current_slide_callback).call || {}
-        ws.send({ 'message' => 'current', 'current' => current[:number] }.to_json)
+    # Create WebSocket connection
+    ws = Faye::WebSocket.new(request.env)
 
-        # Add connection to manager
-        client_id = request.cookies['client_id'] || 'unknown'
-        session_id = session.id rescue 'unknown'
-        remote = request.env['REMOTE_HOST'] || request.env['REMOTE_ADDR']
-        websocket_manager.add_connection(ws, client_id, session_id, remote)
+    # On connection open
+    ws.on :open do |event|
+      # Send current slide position to new client
+      current = websocket_manager.send(:current_slide_callback).call || {}
+      ws.send({ 'message' => 'current', 'current' => current[:number] }.to_json)
 
-        logger&.warn "Open WebSocket connections: #{websocket_manager.connection_count}"
-      end
+      # Add connection to manager
+      client_id = request.cookies['client_id'] || 'unknown'
+      session_id = session.id rescue 'unknown'
+      remote = request.env['REMOTE_HOST'] || request.env['REMOTE_ADDR']
+      websocket_manager.add_connection(ws, client_id, session_id, remote)
 
-      # On message received
-      ws.onmessage do |data|
-        begin
-          websocket_manager.handle_message(ws, data, {
-            cookies: request.cookies,
-            user_agent: request.user_agent,
-            env: request.env
-          })
-        rescue StandardError => e
-          logger&.warn "WebSocket messaging error: #{e}"
-          logger&.debug e.backtrace.join("\n")
-        end
-      end
+      logger&.warn "Open WebSocket connections: #{websocket_manager.connection_count}"
+    end
 
-      # On connection close
-      ws.onclose do
-        logger&.warn "WebSocket closed"
-        websocket_manager.remove_connection(ws)
+    # On message received
+    ws.on :message do |event|
+      begin
+        websocket_manager.handle_message(ws, event.data, {
+          cookies: request.cookies,
+          user_agent: request.user_agent,
+          env: request.env
+        })
+      rescue StandardError => e
+        logger&.warn "WebSocket messaging error: #{e}"
+        logger&.debug e.backtrace.join("\n")
       end
     end
+
+    # On connection close
+    ws.on :close do |event|
+      logger&.warn "WebSocket closed"
+      websocket_manager.remove_connection(ws)
+    end
+
+    # Return async Rack response
+    ws.rack_response
   end
 
 # Instance-level run! for compatibility with ServerAdapter

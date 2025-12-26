@@ -126,7 +126,7 @@ class Showoff::Config
       if sections.is_a? Array
         sections = self.legacy_sections(sections)
       elsif sections.is_a? Hash
-        raise "Named sections are unsupported on Ruby versions less than 1.9." if RUBY_VERSION.start_with? '1.8'
+
         sections.each do |key, value|
           next if value.is_a? Array
           path = File.dirname(value)

@@ -1,17 +1,11 @@
 class ShowoffUtils
 
-  # Helper method to create ERB objects with compatibility for different Ruby versions
+  # Helper method to create ERB objects
   # @param template_string [String] The ERB template string
   # @param trim_mode [String] The ERB trim mode (default: '-')
   # @return [ERB] A properly configured ERB object
   def self.create_erb(template_string, trim_mode = '-')
-    if RUBY_VERSION >= '2.6'
-      # Ruby 2.6+ supports keyword arguments for ERB.new
-      ERB.new(template_string, trim_mode: trim_mode)
-    else
-      # Ruby < 2.6 uses positional arguments
-      ERB.new(template_string, nil, trim_mode)
-    end
+    ERB.new(template_string, trim_mode: trim_mode)
   end
 
   # Helper method to parse a comma separated options string and stores
@@ -463,7 +457,7 @@ def self.heroku(name, password = nil, force = false)
       if sections.is_a? Array
         sections = showoff_legacy_sections(dir, sections)
       elsif sections.is_a? Hash
-        raise "Named sections are unsupported on Ruby versions less than 1.9." if RUBY_VERSION.start_with? '1.8'
+
         sections.each do |key, value|
           next if value.is_a? Array
           cwd  = File.expand_path(dir)
@@ -627,7 +621,7 @@ def self.heroku(name, password = nil, force = false)
     EXTENSIONS[ext] || ext
   end
 
-  REQUIRED_GEMS = %w(redcarpet showoff sinatra-websocket thin)
+  REQUIRED_GEMS = %w(redcarpet showoff faye-websocket eventmachine)
 
   # Creates the file that lists the gems for heroku
   #

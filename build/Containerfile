@@ -1,10 +1,52 @@
-FROM alpine
-MAINTAINER Ben Ford <ben.ford@puppet.com>
+# Containerfile for published showoff gem on Docker Hub (binford2k/showoff)
+#
+# This Containerfile installs the published showoff gem from RubyGems.
+# For local development from source, use the root Containerfile instead.
+#
+# Build:
+#   docker build -t binford2k/showoff:VERSION -t binford2k/showoff:latest build/
+#   podman build -t binford2k/showoff:VERSION -t binford2k/showoff:latest build/
+#
+# Run:
+#   docker run -p 9090:9090 -v /path/to/presentation:/var/cache/showoff:Z binford2k/showoff
+#   podman run -p 9090:9090 -v /path/to/presentation:/var/cache/showoff:Z binford2k/showoff
+#
+# Maintained by: Ben Ford <ben.ford@puppet.com>
+
+FROM ruby:3.3-alpine
+
+LABEL maintainer="Ben Ford <ben.ford@puppet.com>"
+LABEL description="Showoff presentation server from published gem"
+LABEL version="0.24.0"
+
+# Build dependencies for native gem extensions
+RUN apk add --no-cache --virtual .build-deps \
+        build-base \
+        cmake \
+        git \
+        libxml2-dev \
+        libxslt-dev \
+        zlib-dev
+
+# Runtime dependencies
+RUN apk add --no-cache \
+        libxml2 \
+        libxslt \
+        zlib \
+        libstdc++
+
+# Install showoff gem from RubyGems (not from local source)
+RUN gem install showoff --no-document && \
+    rm -rf /root/.gem
+
+# Clean up build dependencies to reduce image size
+RUN apk del .build-deps
+
+# Create working directory for presentations
 WORKDIR /var/cache/showoff
-RUN apk add --no-cache ruby ruby-dev zlib-dev build-base git cmake busybox \
-        && gem install etc commonmarker showoff --no-document              \
-        && apk del --purge  binutils isl libgomp libatomic mpc1 gcc make musl-dev libc-dev fortify-headers g++ build-base libacl libbz2 xz-libs libarchive cmake      \
-        && rm -rf `gem environment gemdir`/gems/commonmarker-*/test        \
-        && rm -rf `gem environment gemdir`/cache
+
+# Expose default Showoff port
+EXPOSE 9090
 
 ENTRYPOINT ["showoff", "serve"]
+CMD []

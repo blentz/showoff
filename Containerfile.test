@@ -23,7 +23,7 @@
 # - Default CMD runs RSpec tests instead of serving presentations
 # - Flexible entrypoint for running different test commands
 
-FROM ruby:3.2-alpine
+FROM ruby:3.3-alpine
 
 # Build dependencies for native gem extensions
 # - build-base: gcc, make, etc.

@@ -259,12 +259,12 @@ end
       @css_files = []
       @js_files = []
 
-      # Variables needed by header.erb
-      @language = 'en'
-      @highlightStyle = 'default'
-      @keymap = {}
-      @keycode_dictionary = {}
-      @keycode_shifted_keys = {}
+      # Variables needed by header.erb - get from presentation
+      @language = @presentation.language
+      @highlightStyle = @presentation.highlightStyle
+      @keymap = @presentation.keymap
+      @keycode_dictionary = @presentation.keycode_dictionary
+      @keycode_shifted_keys = @presentation.keycode_shifted_keys
 
       content_type 'text/html'
       erb :index

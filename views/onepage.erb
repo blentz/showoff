@@ -61,7 +61,13 @@
 
 
       // render diagrams and text manipulations unconditionally instead of waiting for slide views
-      mermaid.init(undefined, $(".language-render-diagram"));
+      // Mermaid needs the code in a div, not in <pre><code>, so transform the DOM first
+      $('code.language-render-diagram').each(function() {
+        var code = $(this).text();
+        var div = $('<div class="mermaid">').text(code);
+        $(this).parent().replaceWith(div);
+      });
+      mermaid.init(undefined, $("div.mermaid"));
       $('.content.bigtext').bigtext();
 
       // translate SVG images, inlining them first if needed.

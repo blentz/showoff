@@ -48,9 +48,13 @@ class Showoff::Server
       pres_file: 'showoff.json',
       verbose: false,
       execute: false,
-      host: 'localhost',
       port: 9090
     }.merge(options)
+
+    # Set Sinatra's bind setting (accepts both :host and :bind for compatibility)
+    bind_host = @options[:bind] || @options[:host] || '0.0.0.0'
+    self.class.set :bind, bind_host
+    self.class.set :port, @options[:port]
 
     super(nil)
 
@@ -820,15 +824,6 @@ end
     ws.rack_response
   end
 
-# Instance-level run! for compatibility with ServerAdapter
-def run!(options = {})
-  # Use Rack directly to run the server
-  require 'rack'
-  # Try puma first (modern, best WebSocket support), fallback to rackup default
-  handler = Rack::Handler.pick(['puma', 'rackup'])
-  handler.run(self,
-    Host: @options[:host] || 'localhost',
-    Port: (@options[:port] || 9090).to_i
-  )
-end
+  # Note: We rely on Sinatra::Base's run! method which properly handles
+  # the :bind and :port settings we configure in initialize
 end

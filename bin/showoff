@@ -425,7 +425,7 @@ EOS
           review: options[:r] || options[:review] || false,
           standalone: options[:S] || options[:standalone] || false,
           nocache: options[:nocache] || false,
-          host: options[:h] || options[:host] || options[:bind] || 'localhost',
+          bind: options[:bind] || options[:host] || options[:h] || '0.0.0.0',
           port: options[:p] || options[:port] || 9090
         }
 
@@ -450,7 +450,7 @@ EOS
 
             # Run the server using class method
             Showoff::Server.run!(
-              host: normalized_options[:host],
+              bind: normalized_options[:bind],
               port: normalized_options[:port].to_i
             )
           end
@@ -473,7 +473,7 @@ EOS
 
           # Run the server using class method
           Showoff::Server.run!(
-            host: normalized_options[:host],
+            bind: normalized_options[:bind],
             port: normalized_options[:port].to_i
           )
         end

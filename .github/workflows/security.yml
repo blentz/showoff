@@ -2,18 +2,26 @@ name: Security Audit
 
 on:
   schedule:
-    - cron: '0 0 * * 0'
+    - cron: '0 0 * * 0'  # Weekly on Sunday
   push:
-    branches: [ main ]
+    branches: [main]
+  pull_request:
+    branches: [main]
 
 jobs:
   audit:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: ruby/setup-ruby@v1
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
         with:
-          ruby-version: '3.0'
+          ruby-version: '3.3'
           bundler-cache: true
-      - run: bundle exec bundler-audit update
-      - run: bundle exec bundler-audit check
+
+      - name: Update vulnerability database
+        run: bundle exec bundler-audit update
+
+      - name: Run security audit
+        run: bundle exec bundler-audit check

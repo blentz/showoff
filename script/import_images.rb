@@ -18,7 +18,7 @@ section = ARGV[1]
 path = ARGV[2]
 
 # look for showoff file
-if File.exists?(preso)
+if File.exist?(preso)
   Dir.chdir(preso) do
     # make the new directory
     Dir.mkdir(section) rescue nil

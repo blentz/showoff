@@ -171,6 +171,36 @@ end
     SHOWOFF_VERSION = '0.20.4' unless defined?(SHOWOFF_VERSION)
   end
 
+  # Security headers for all responses
+  before do
+    # Prevent clickjacking attacks
+    headers['X-Frame-Options'] = 'SAMEORIGIN'
+
+    # Prevent MIME type sniffing
+    headers['X-Content-Type-Options'] = 'nosniff'
+
+    # Enable XSS filter in browsers that support it
+    headers['X-XSS-Protection'] = '1; mode=block'
+
+    # Referrer policy - don't leak full URL to other sites
+    headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+
+    # Content Security Policy - restrictive but allows inline scripts needed for showoff
+    # Note: 'unsafe-inline' and 'unsafe-eval' are required for:
+    # - Inline scripts in templates (setupPreso, etc.)
+    # - CoffeeScript compilation (uses eval)
+    # - Code execution feature (uses eval)
+    headers['Content-Security-Policy'] = [
+      "default-src 'self'",
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+      "style-src 'self' 'unsafe-inline'",
+      "img-src 'self' data: blob:",
+      "font-src 'self'",
+      "connect-src 'self' ws: wss:",
+      "frame-ancestors 'self'"
+    ].join('; ')
+  end
+
   # Helper methods for templates
   helpers do
     # Return empty array if css_files is not defined
@@ -499,11 +529,11 @@ end
 
     case RUBY_PLATFORM
     when /darwin/
-      `open #{filename}`
+      system('open', filename)
     when /linux/
-      `xdg-open #{filename}`
+      system('xdg-open', filename)
     when /cygwin|mswin|mingw|bccwin|wince|emx/
-      `start #{filename}`
+      system('start', '', filename)
     else
       logger&.warn "Cannot open #{filename}, unknown platform #{RUBY_PLATFORM}."
     end

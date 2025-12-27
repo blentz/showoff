@@ -54,8 +54,8 @@ describe Showoff::Server::ExecutionManager do
         subject.execute('ruby', 'puts "Hello"')
       end
 
-      it 'executes the code with the appropriate parser' do
-        expect(Open3).to receive(:capture2e).with('ruby /tmp/showoff-execution')
+      it 'executes the code with the appropriate parser using argv array' do
+        expect(Open3).to receive(:capture2e).with('ruby', '/tmp/showoff-execution')
         subject.execute('ruby', 'puts "Hello"')
       end
 

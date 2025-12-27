@@ -77,7 +77,7 @@ class Showoff::Server::ExecutionManager
         Tempfile.open('showoff-execution') do |f|
           File.write(f.path, code)
           @logger.debug "Evaluating: #{parser} #{f.path}" if @logger
-          output, status = Open3.capture2e("#{parser} #{f.path}")
+          output, status = Open3.capture2e(parser, f.path)
 
           unless status.success?
             @logger.warn "Command execution failed" if @logger

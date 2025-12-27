@@ -229,16 +229,25 @@ def self.heroku(name, password = nil, force = false)
 
   # generate a static version of the site into the gh-pages branch
   def self.github
+    require 'open3'
+
     Showoff.do_static(nil)
     FileUtils.touch 'static/.nojekyll'
-    `git add -f static`
-    sha = `git write-tree`.chomp
-    tree_sha = `git rev-parse #{sha}:static`.chomp
-    `git read-tree HEAD`  # reset staging to last-commit
-    ghp_sha = `git rev-parse gh-pages 2>/dev/null`.chomp
-    extra = ghp_sha != 'gh-pages' ? "-p #{ghp_sha}" : ''
-    commit_sha = `echo 'static presentation' | git commit-tree #{tree_sha} #{extra}`.chomp
-    `git update-ref refs/heads/gh-pages #{commit_sha}`
+    system('git', 'add', '-f', 'static')
+    sha, _ = Open3.capture2('git', 'write-tree')
+    sha = sha.chomp
+    tree_sha, _ = Open3.capture2('git', 'rev-parse', "#{sha}:static")
+    tree_sha = tree_sha.chomp
+    system('git', 'read-tree', 'HEAD')  # reset staging to last-commit
+    ghp_sha, status = Open3.capture2('git', 'rev-parse', 'gh-pages')
+    ghp_sha = ghp_sha.chomp
+    if status.success?
+      commit_sha, _ = Open3.capture2('git', 'commit-tree', tree_sha, '-p', ghp_sha, '-m', 'static presentation')
+    else
+      commit_sha, _ = Open3.capture2('git', 'commit-tree', tree_sha, '-m', 'static presentation')
+    end
+    commit_sha = commit_sha.chomp
+    system('git', 'update-ref', 'refs/heads/gh-pages', commit_sha)
   end
 
   # clone a repo url, then run a provided block

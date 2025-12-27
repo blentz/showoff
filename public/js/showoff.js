@@ -1967,6 +1967,39 @@ function executeCode() {
   };
 }
 
+// Lazy-load CoffeeScript only when needed
+var coffeeScriptLoaded = false;
+var coffeeScriptLoading = false;
+var coffeeScriptCallbacks = [];
+
+function loadCoffeeScript(callback) {
+  if (typeof CoffeeScript !== 'undefined') {
+    coffeeScriptLoaded = true;
+    callback();
+    return;
+  }
+
+  coffeeScriptCallbacks.push(callback);
+
+  if (coffeeScriptLoading) return;
+  coffeeScriptLoading = true;
+
+  var script = document.createElement('script');
+  script.src = 'js/coffee-script-2.7.0.js';
+  script.onload = function() {
+    coffeeScriptLoaded = true;
+    coffeeScriptLoading = false;
+    coffeeScriptCallbacks.forEach(function(cb) { cb(); });
+    coffeeScriptCallbacks = [];
+  };
+  script.onerror = function() {
+    coffeeScriptLoading = false;
+    coffeeScriptCallbacks.forEach(function(cb) { cb(new Error('Failed to load CoffeeScript')); });
+    coffeeScriptCallbacks = [];
+  };
+  document.head.appendChild(script);
+}
+
 // any code that can be run directly in the browser
 function executeLocalCode(lang, codeDiv) {
   var result = null;
@@ -1978,18 +2011,32 @@ function executeLocalCode(lang, codeDiv) {
     switch(lang) {
       case 'javascript':
         result = eval(codeDiv.text());
+        if (result != null) displayHUD(result);
         break;
       case 'coffeescript':
-        result = eval(CoffeeScript.compile(codeDiv.text(), {bare: true}));
-        break;
+        // Lazy-load CoffeeScript only when actually executing CoffeeScript code
+        loadCoffeeScript(function(err) {
+          if (err) {
+            displayHUD('Failed to load CoffeeScript compiler');
+            return;
+          }
+          try {
+            var csResult = eval(CoffeeScript.compile(codeDiv.text(), {bare: true}));
+            if (csResult != null) displayHUD(csResult);
+          } catch(e) {
+            displayHUD(e.message);
+          }
+        });
+        return; // Exit early - callback will handle the result
       default:
         result = 'No local exec handler for ' + lang;
+        if (result != null) displayHUD(result);
     }
   }
   catch(e) {
     result = e.message;
+    if (result != null) displayHUD(result);
   };
-  if (result != null) displayHUD(result);
 }
 
 // request the server to execute a code block by path and index

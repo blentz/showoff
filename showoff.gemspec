@@ -21,27 +21,22 @@ Gem::Specification.new do |s|
   s.files            += Dir.glob("public/**/*")
   s.files            += Dir.glob("locales/**/*")
   s.add_dependency      "commonmarker",      "~> 2.6"
-
-  s.add_dependency      "fidget",            "~> 0.0.6" # Prevent system sleep during presentations
-  s.add_dependency      "gli",               "~> 2.20"
+  s.add_dependency      "gli",               "~> 2.22"
   s.add_dependency      "htmlentities",      "~> 4.4"
-  s.add_dependency      "i18n",              "~> 1.14" # Latest stable
+  s.add_dependency      "i18n",              "~> 1.14"
   s.add_dependency      "iso-639",           "~> 0.3"
-  s.add_dependency      "json",              "~> 2.7"
-  # Security: Updated to resolve multiple CVEs
-  # nokogiri >= 1.18.9 for libxml2/libxslt CVE fixes (requires Ruby >= 3.1.0)
-  # sinatra >= 4.2.0 for CVE-2024-21510, CVE-2025-61921 fixes (requires Ruby >= 2.7.8)
+  s.add_dependency      "json",              "~> 2.18"
+  # Security: nokogiri >= 1.18.9 for libxml2/libxslt CVE fixes (requires Ruby >= 3.1.0)
   s.add_dependency      "nokogiri",          ">= 1.18.9"
   s.add_dependency      "parslet",           "~> 2.0"
-  s.add_dependency      "rack-contrib",      "~> 2.3"
-  s.add_dependency      "redcarpet",         "~> 3.5"
+  s.add_dependency      "rack-contrib",      "~> 2.5"
+  s.add_dependency      "redcarpet",         "~> 3.6"
+  # Security: sinatra >= 4.2.0 for CVE-2024-21510, CVE-2025-61921 fixes
   s.add_dependency      "sinatra",           "~> 4.2"
-  s.add_dependency      "rackup",            "~> 2.1" # Required by Sinatra 4.x
+  s.add_dependency      "rackup",            "~> 2.3"
   s.add_dependency      "faye-websocket",    "~> 0.12"
-  s.add_dependency      "puma",              "~> 6.0" # Modern Rack web server
-  s.add_dependency      "tilt",              "~> 2.6" # Latest stable
-
-  s.add_development_dependency "mg",         "~> 0.0"
+  s.add_dependency      "puma",              "~> 6.6"
+  s.add_dependency      "tilt",              "~> 2.6"
   s.description       = <<-desc
   Showoff is a Sinatra web app that reads simple configuration files for a
   presentation.  It is sort of like a Keynote web app engine.  I am using it

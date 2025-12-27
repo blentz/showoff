@@ -3,7 +3,7 @@
 $LOAD_PATH.unshift File.join(File.dirname(__FILE__), '..', 'lib')
 require 'showoff/version'
 require 'rubygems'
-require 'fidget'
+
 require 'gli'
 
 # See https://github.com/davetron5000/gli/issues/196 for rationale for this silly wrapper
@@ -403,9 +403,14 @@ EOS
 
   "
 
-      if options[:nosleep] and Fidget.current_process
-        puts '**** System sleep has been suspended. ****'
+      # Prevent system sleep on macOS using caffeinate
+      caffeinate_pid = nil
+      if options[:nosleep] && RUBY_PLATFORM =~ /darwin/
+        caffeinate_pid = Process.spawn('caffeinate', '-d', [:out, :err] => '/dev/null')
+        Process.detach(caffeinate_pid)
+        puts '**** System sleep has been suspended (caffeinate -d). ****'
         puts
+        at_exit { Process.kill('TERM', caffeinate_pid) rescue nil }
       end
 
       # Helper method to configure SSL

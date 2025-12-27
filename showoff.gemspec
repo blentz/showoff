@@ -7,10 +7,10 @@ Gem::Specification.new do |s|
   s.version           = SHOWOFF_VERSION
   s.date              = Date.today.to_s
   s.summary           = "The best damn presentation software a developer could ever love."
-  s.homepage          = "https://puppetlabs.github.io/showoff"
+  s.homepage          = "https://github.com/blentz/showoff"
   s.license           = 'MIT'
-  s.email             = "eduteam@puppet.com"
-  s.authors           = ["Scott Chacon","Ben Ford"]
+  s.email             = ""
+  s.authors           = ["Scott Chacon", "Ben Ford", "Brett Lentz"]
   s.require_path      = "lib"
   s.executables       = %w( showoff )
   s.required_ruby_version = ">= 3.1.0" # Required for nokogiri >= 1.18.9 security fixes

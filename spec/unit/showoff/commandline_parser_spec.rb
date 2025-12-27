@@ -27,7 +27,9 @@ RSpec.describe CommandlineParser do
     input = <<~TXT
       $ echo one \\
       two \\
-      three\n      ok\n    TXT
+      three
+      ok
+    TXT
     tree = parser.parse(input)
     cmd = tree.first[:command]
     expect(cmd[:input]).to eq("echo one two three")
@@ -36,7 +38,11 @@ RSpec.describe CommandlineParser do
 
   it 'handles optional output blocks and blank lines' do
     input = <<~TXT
-      $ date\n\n\n      Tue Dec 25 12:00:00 UTC 2025\n    TXT
+      $ date
+
+
+      Tue Dec 25 12:00:00 UTC 2025
+    TXT
     tree = parser.parse(input)
     cmd = tree.first[:command]
     expect(cmd[:input]).to eq('date')

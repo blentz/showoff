@@ -28,11 +28,9 @@ jobs:
 
       - name: Run unit tests
         run: bundle exec rspec spec/unit/ --format documentation
-        continue-on-error: true  # Some pre-existing test failures need fixing
 
       - name: Run integration tests
         run: bundle exec rspec spec/integration/ --format documentation
-        continue-on-error: true  # Integration tests may have external dependencies
 
   lint:
     runs-on: ubuntu-latest

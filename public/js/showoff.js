@@ -1117,7 +1117,16 @@ function showIncremental(incr)
 {
 		elem = incrElem.eq(incrCurr);
 		if (incrCode && elem.hasClass('command')) {
-			incrElem.eq(incrCurr).removeClass('hidden').jTypeWriter({duration:1.0});
+			var domElem = incrElem.eq(incrCurr).removeClass('hidden').get(0);
+			var textContent = domElem.textContent;
+			domElem.textContent = '';
+			// Use Typed.js for typewriter effect on commandline slides
+			new Typed(domElem, {
+				strings: [textContent],
+				typeSpeed: 1000 / textContent.length, // Complete in ~1 second
+				showCursor: false,
+				onComplete: function() {}
+			});
 		} else {
 			incrElem.eq(incrCurr).removeClass('hidden');
 		}

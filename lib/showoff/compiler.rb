@@ -96,14 +96,14 @@ class Showoff::Compiler
     Downloads.scanForFiles!(doc, @options)
 
     # This call must be last in the chain.
-    # Notes remain in the HTML, hidden by CSS in regular views and shown in print views.
+    # Notes are extracted from the document and returned separately.
     #
     # must pass in extra context because this will render markdown itself
-    doc = Notes.render!(doc, @profile, @options)
+    doc, notes = Notes.render!(doc, @profile, @options)
 
-    # Return both the document and an empty notes array (notes are embedded in doc now)
+    # Return both the document (with notes removed) and the extracted notes
     # The slide template expects this tuple format
-    [doc, []]
+    [doc, notes]
   end
 
 end

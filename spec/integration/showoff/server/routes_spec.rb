@@ -237,13 +237,14 @@ RSpec.describe 'Showoff::Server Routes', type: :request do
       expect(last_response.headers['Content-Type']).to include('text/html')
       expect(last_response.body).to include('<html')
       expect(last_response.body).to include('<body')
-      expect(last_response.body).to match(/<div class=['"]slides['"]>/)
+      expect(last_response.body).to match(/<div id=['"]slides['"]/)
     end
 
     it 'includes slide content with print formatting' do
       get '/print'
       expect(last_response.status).to eq(200)
-      expect(last_response.body).to include('Placeholder slide content for print view')
+      # Slides contain actual content from fixtures
+      expect(last_response.body).to include('class="slide')
     end
 
     it 'handles section parameter' do
@@ -277,13 +278,14 @@ RSpec.describe 'Showoff::Server Routes', type: :request do
       expect(last_response.headers['Content-Type']).to include('text/html')
       expect(last_response.body).to include('<html')
       expect(last_response.body).to include('<body')
-      expect(last_response.body).to match(/<div class=['"]slides['"]>/)
+      expect(last_response.body).to match(/<div id=['"]slides['"]/)
     end
 
     it 'includes slide content' do
       get '/onepage'
       expect(last_response.status).to eq(200)
-      expect(last_response.body).to include('Placeholder slide content for onepage view')
+      # Slides contain actual content from fixtures
+      expect(last_response.body).to include('class="slide')
     end
 
     it 'handles errors gracefully' do
@@ -586,7 +588,7 @@ RSpec.describe 'Showoff::Server Routes', type: :request do
     it 'renders the onepage template with supplemental wrapper class' do
       get_supplemental_or_skip
       expect(last_response.body).to include('<body')
-      expect(last_response.body).to match(/<div class=['"]slides['"]>/)
+      expect(last_response.body).to match(/<div id=['"]slides['"]/)
       expect(last_response.body).to match(/class=['"]supplemental['"]/)
     end
 

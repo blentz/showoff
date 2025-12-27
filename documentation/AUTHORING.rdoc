@@ -86,35 +86,53 @@ Showoff extensions to the language are documented below.
 
 Some useful styles for each slide are listed below. Many of them can be combined.
 
+[title-slide] Style for the opening/title slide of your presentation. See <tt>example/one/slidesA.md</tt>.
 [center] centers images on a slide
 [full-page] allows an image to take up the whole slide
-[bullets] sizes and separates bullets properly (fits up to 5, generally)
+[bullets] sizes and separates bullets properly (fits up to 5, generally). See <tt>example/one/slidesA.md</tt>.
 [smbullets] sizes and separates more bullets (smaller, closer together)
-[subsection] creates a different background for titles
+[subsection] creates a different background for section divider slides. See <tt>example/two/slidesA.md</tt>.
 [command] monospaces h1 title slides
-[commandline] for pasted commandline sections (needs leading '$' for commands, then output on subsequent lines)
+[commandline] for pasted commandline sections (needs leading '$' or '#' for commands, then output on subsequent lines). See <tt>example/one/slidesB.md</tt>.
 [code] monospaces everything on the slide
-[incremental] can be used with 'bullets' and 'commandline' styles, will incrementally update elements on arrow key rather than switch slides
+[incremental] can be used with 'bullets' and 'commandline' styles, will incrementally update elements on arrow key rather than switch slides. See <tt>example/one/slidesA.md</tt>.
 [inverse] changes to a dark background and light text.
 [small] make all slide text 80%
 [smaller] make all slide text 70%
-[execute] on Javascript, Coffeescript, Ruby, and Shell highlighted code slides, you can click on the code to execute it and display the results on the slide
+[execute] on Javascript, Coffeescript, Ruby, and Shell highlighted code slides, you can click on the code to execute it and display the results on the slide. See <tt>example/two/slidesA.md</tt>.
 [printonly] this slide should only appear in the printed version of the presentation
 [noprint] this slide will not appear in the printed version of the presentation
+[toc] this slide will not appear in the table of contents
+[cover] exclude this slide from the table of contents (alias for toc)
 [supplemental] rather than adding a slide to the main presentation, add a slide to supplemental materials. See below.
 [form=id] Render form elements on this slide with a given form ID. See below, and in FORMS.rdoc.
 [background-fit] Scales a background image to the largest size that both height and width are onscreen. The default is to completely fill the slide.
-[bigtext] This will enlarge all the contents of the slide to the maximum possible size. <em>Caution, this should only be used for slides with just a few words or short phrases!</em>
-[autoplay] If you've included videos on the slide, this style will cause them to play when you switch to this slide.
+[bigtext] This will enlarge all the contents of the slide to the maximum possible size. <em>Caution, this should only be used for slides with just a few words or short phrases!</em> See <tt>example/bigtext/slides.md</tt>.
+[autoplay] If you've included videos on the slide, this style will cause them to play when you switch to this slide. See <tt>example/embedding/slides.md</tt>.
 [activity] If you tag this slide as an <tt>activity</tt>, then audience members' presentations will get a toggle button on their slide, and their presentation will stop tracking along until they toggle it to complete. The presenter sees a count of all incompletes in the lower right of their slide preview.
 
-Check out the example directory included to see examples of most of these.
+Check out the <tt>example/</tt> directory included to see examples of most of these.
 
 == Callout paragraph styles
 
 Several custom "callout" paragraph styles are included. This allows you to highlight points
 in your presentation, with a callout box and an optional icon. To do this, add <tt>.callout</tt>
-or <tt>.callout.[style]</tt> as the first word of your paragraph, such as:
+or <tt>.callout.[style]</tt> as the first word of your paragraph.
+
+Available callout styles:
+
+[.callout] Basic callout with an outlined box (no icon)
+[.callout.info] Information callout with an info icon
+[.callout.warning] Warning callout with an exclamation triangle icon
+[.callout.question] Question callout with a question mark icon
+[.callout.exercise] Exercise callout with a pencil icon
+[.callout.stop] Stop/danger callout with a ban icon
+[.callout.thumbsup] Positive callout with a thumbs up icon
+[.callout.conversation] Discussion callout with a speech bubble icon
+[.callout.glossary] Glossary term callout with a book icon
+[.callout.terminal] Terminal/command callout with a terminal icon
+
+Example usage:
 
     <!SLIDE >
     # Example callout paragraphs
@@ -122,6 +140,12 @@ or <tt>.callout.[style]</tt> as the first word of your paragraph, such as:
     .callout This paragraph will be highlighted with an outlined box.
 
     .callout.info Adding the `.info` modifier adds an info icon.
+
+    .callout.warning This is a warning message.
+
+    .callout.stop This indicates something critical.
+
+See <tt>example/one/callouts.md</tt> for a complete example of all callout styles.
 
 rdoc-image:../images/callouts.png
 
@@ -152,39 +176,20 @@ it extraordinarily easy to reorder the presentation.
 
 = Slide Transitions
 
-Transitions can be supplied through the use of transition=tname on the !SLIDE
-definition, where tname is one of the following supported transitions:
+Slide transitions are powered by {Swiper.js}[https://swiperjs.com/] (version 11).
+Transitions can be supplied through the use of <tt>transition=tname</tt> on the
+<tt>!SLIDE</tt> definition:
 
-- blindX
-- blindY
-- blindZ
-- cover
-- curtainX
-- curtainY
-- fade
-- fadeZoom
-- growX
-- growY
-- none (this is the default)
-- scrollUp
-- scrollDown
-- scrollLeft
-- scrollRight
-- scrollHorz
-- scrollVert
-- shuffle
-- slideX
-- slideY
-- toss
-- turnUp
-- turnDown
-- turnLeft
-- turnRight
-- uncover
-- wipe
-- zoom
+    !SLIDE transition=fade
 
-The transitions are provided by jQuery Cycle plugin. See http://www.malsup.com/jquery/cycle/browser.html to view the effects and http://www.malsup.com/jquery/cycle/adv2.html for how to add custom effects.
+Currently supported transitions:
+
+- fade (crossfade between slides)
+- none (instant transition, the default)
+
+The fade transition provides a smooth crossfade effect between slides.
+
+See <tt>example/one/slidesA.md</tt> for examples of transition usage.
 
 = Slide Backgrounds
 
@@ -199,13 +204,49 @@ By default, the background will be scaled to completely cover the slide. If you
 specify the <tt>background-fit</tt> slide style, then the background will be
 scaled to the largest size that both height and width fit within the slide.
 
+= Embedding Media
+
+== Images
+
+Standard Markdown image syntax is supported. Image paths are relative to the
+slide's current directory:
+
+    ![Alt text](image.png)
+
+You can also style images by including a class name as the first word:
+
+    ![.centered My Image](path/to/image.png)
+
+== Videos
+
+HTML5 video can be embedded directly in slides:
+
+    <video width="950" height="535" controls>
+      <source src="file/video.mp4" type="video/mp4">
+      Your browser does not support the video tag.
+    </video>
+
+Note that video paths should use the <tt>file/</tt> prefix and be relative to
+the presentation root directory.
+
+Use the <tt>autoplay</tt> slide style to automatically start videos when the
+slide is displayed:
+
+    !SLIDE autoplay
+    # Demo Video
+    <video width="950" height="535">
+      <source src="file/demo.mp4" type="video/mp4">
+    </video>
+
+See <tt>example/embedding/slides.md</tt> for complete examples of image and video embedding.
+
 = Language Highlighting
 
-Showoff uses {Highlight.js}[https://highlightjs.org] (version 9.15.10) to highlight
+Showoff uses {Highlight.js}[https://highlightjs.org] (version 11.11.1) to highlight
 code blocks. If you begin a code block with *four spaces* and three @-signs followed
 by a programming language name, that line will be stripped and the rest of the block
 will become sparkly and colorful. You can uppercase the name if you like, and if you
-add the `numbers` keyword, it will be rendered with line numbers.
+add the <tt>numbers</tt> keyword, it will be rendered with line numbers.
 
     @@@ Ruby
     10.times { puts "Whee!" }
@@ -214,6 +255,9 @@ With line numbers:
 
     @@@ Ruby numbers
     10.times { puts "Whee!" }
+
+See <tt>example/two/slidesA.md</tt> for code highlighting examples including
+executable code blocks.
 
 To highlight a specific line in your snippet of code, simply prefix it with a <tt>*</tt>.
 
@@ -279,36 +323,39 @@ key in the <tt>showoff.json</tt> file. For example:
       ...
     }
 
-Highlighting styles include:
+Highlighting styles include (104 themes available):
 
-    agate                     atelier-seaside.light        mono-blue
-    androidstudio             atelier-sulphurpool.dark     monokai
-    arta                      atelier-sulphurpool.light    monokai_sublime
-    ascetic                   brown_paper                  obsidian
-    atelier-cave.dark         codepen-embed                paraiso.dark
-    atelier-cave.light        color-brewer                 paraiso.light
-    atelier-dune.dark         dark                         pojoaque
-    atelier-dune.light        darkula                      railscasts
-    atelier-estuary.dark      default                      rainbow
-    atelier-estuary.light     docco                        school_book
-    atelier-forest.dark       far                          solarized_dark
-    atelier-forest.light      foundation                   solarized_light
-    atelier-heath.dark        github-gist                  sunburst
-    atelier-heath.light       github                       tomorrow-night-blue
-    atelier-lakeside.dark     googlecode                   tomorrow-night-bright
-    atelier-lakeside.light    hybrid                       tomorrow-night-eighties
-    atelier-plateau.dark      idea                         tomorrow-night
-    atelier-plateau.light     ir_black                     tomorrow
-    atelier-savanna.dark      kimbie.dark                  vs
-    atelier-savanna.light     kimbie.light                 xcode
-    atelier-seaside.dark      magula                       zenburn
+    agate                 dracula               monokai-sublime
+    androidstudio         far                   obsidian
+    arduino-light         foundation            paraiso-dark
+    arta                  github                paraiso-light
+    ascetic               github-gist           pojoaque
+    atelier-cave-dark     googlecode            qtcreator_dark
+    atelier-cave-light    grayscale             qtcreator_light
+    atelier-dune-dark     gruvbox-dark          railscasts
+    atelier-dune-light    gruvbox-light         rainbow
+    (and more...)         hopscotch             school_book
+    brown_paper           hybrid                solarized_dark
+    codepen-embed         idea                  solarized_light
+    color-brewer          ir_black              sunburst
+    dark                  kimbie.dark           tomorrow
+    darkula               kimbie.light          tomorrow-night
+    default               magula                tomorrow-night-blue
+    docco                 mono-blue             tomorrow-night-bright
+                          monokai               tomorrow-night-eighties
+                          monokai_sublime       vs
+                                                xcode
+                                                zenburn
+
+See the <tt>public/css/highlight/</tt> directory for all available themes.
 
 
 == Console Windows
 
 If you'd like to show a representation of a console window, you can use the syntax highlight
 styles of <tt>Console</tt> and <tt>PowerShellConsole</tt>. You can also add the class of
-<tt>nochrome</tt> if you don't want the window titlebars drawn.
+<tt>nochrome</tt> if you don't want the window titlebars drawn, or <tt>code_wrap</tt> if you
+want long lines to wrap.
 
 For example:
 
@@ -327,36 +374,53 @@ For example:
 
 <br>
 
-    @@@ PowerShellConsole nochrome
-    PS C:\> echo "This is a PowerShell window with no titlebar"
+    @@@ PowerShellConsole nochrome code_wrap
+    PS C:\> echo "This is a PowerShell window with no titlebar and wrapped text"
+
+See <tt>example/highlights/02console.md</tt> for more console examples.
 
 
 == Rendering Diagrams
 
-Showoff includes the {Mermaid}[https://mermaid-js.github.io/] diagram renderer, which allows
-you to describe diagrams with a simple language and style them with CSS. To do so, create a
-code block using a highlight style of <tt>render-diagram</tt>.
+Showoff includes the {Mermaid}[https://mermaid.js.org/] diagram renderer (version 11.12.2),
+which allows you to describe diagrams with a simple language and style them with CSS.
+To do so, create a code block using a highlight style of <tt>render-diagram</tt>.
 
-For example:
+Mermaid supports many diagram types including:
+
+- Flowcharts
+- Sequence diagrams
+- Class diagrams
+- State diagrams
+- Entity Relationship diagrams
+- Gantt charts
+- Pie charts
+- Git graphs
+- and more
+
+Example flowchart:
+
+    @@@ render-diagram
+    flowchart LR
+        A[Start] --> B{Decision}
+        B -->|Yes| C[Action 1]
+        B -->|No| D[Action 2]
+        C --> E[End]
+        D --> E
+
+Example Gantt chart:
 
     @@@ render-diagram
     gantt
         dateFormat  YYYY-MM-DD
-        title Adding GANTT diagram functionality to mermaid
-        section A section
-        Completed task            :done,    des1, 2014-01-06,2014-01-08
-        Active task               :active,  des2, 2014-01-09, 3d
-        Future task               :         des3, after des2, 5d
-        Future task2              :         des4, after des3, 5d
-        section Critical tasks
-        Completed task in the critical line :crit, done, 2014-01-06,24h
-        Implement parser and jison          :crit, done, after des1, 2d
-        Create tests for parser             :crit, active, 3d
-        Future task in critical line        :crit, 5d
-        Create tests for renderer           :2d
-        Add to mermaid                      :1d
+        title Project Timeline
+        section Phase 1
+        Task 1           :done,    t1, 2024-01-01, 2024-01-07
+        Task 2           :active,  t2, 2024-01-08, 7d
+        section Phase 2
+        Task 3           :         t3, after t2, 5d
 
-See https://mermaid-js.github.io/mermaid/#/flowchart for a syntax tutorial.
+See https://mermaid.js.org/intro/ for the full syntax documentation and examples.
 
 
 = Forms
@@ -527,7 +591,9 @@ showoff:incr:: will be triggered when you advance to the next increment on the p
 showoff:prev:: will be triggered when you switch to the previous page
 
 These events are triggered on the "div.content" child of the slide, so you must
-add a custom and unique class to your SLIDE to identify it:
+add a custom and unique class to your SLIDE to identify it.
+
+See <tt>example/three/js-events.md</tt> for complete working examples of custom events.
 
     !SLIDE custom_and_unique_class
     # 1st Example h1
@@ -688,6 +754,10 @@ have to specify it in the slide header:
 
      !SLIDE[tpl=special]
      # Header
+
+See <tt>example/four/01slide.md</tt> and <tt>example/simple.tpl</tt> for a
+working template example. The <tt>example/showoff.json</tt> shows how templates
+are configured.
 
 == Template Commands
 

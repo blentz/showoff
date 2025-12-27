@@ -1503,7 +1503,7 @@ h1.section_title {
 /* Swiper slide navigation */
 #preso.swiper {
   /* Keep existing 1024x768 dimensions from .slide rule above */
-  overflow: hidden;
+  /* Note: overflow must be visible for 3D effects (cube, flip, etc.) */
 }
 #preso .swiper-wrapper {
   height: 100%;
@@ -1513,6 +1513,14 @@ h1.section_title {
   width: 1024px;
   height: 768px;
   flex-shrink: 0;
+}
+
+/* Allow 3D effects to render outside container bounds */
+#preso.swiper-cube,
+#preso.swiper-flip,
+#preso.swiper-cards,
+#preso.swiper-coverflow {
+  overflow: visible;
 }
 
 /* Mermaid diagram constraints */

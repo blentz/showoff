@@ -193,16 +193,36 @@ function loadSlides(load_slides, reload, hard) {
         location.reload(true);
       }
       else {
-        $("#slides img").batchImageLoad({
-          loadingCompleteCallback: initializePresentation()
-        });
+        waitForImages($("#slides img"), initializePresentation);
       }
     })
   } else {
-    $("#slides img").batchImageLoad({
-      loadingCompleteCallback: initializePresentation()
-    })
+    waitForImages($("#slides img"), initializePresentation);
   }
+}
+
+// Wait for all images to load (or error), then call callback
+function waitForImages(images, callback) {
+  var total = images.length;
+  if (total === 0) {
+    callback();
+    return;
+  }
+
+  var loaded = 0;
+  function done() {
+    loaded++;
+    if (loaded >= total) callback();
+  }
+
+  images.each(function() {
+    if (this.complete) {
+      done();
+    } else {
+      this.addEventListener('load', done);
+      this.addEventListener('error', done);
+    }
+  });
 }
 
 function initializePresentation() {
@@ -883,27 +903,24 @@ function showSlide(back_step, updatepv) {
   currentSlide = slides.eq(slidenum)
   currentSlide.addClass('currentSlide');
 
-  var transition = currentSlide.attr('data-transition')
   var fullPage = currentSlide.find(".content").is('.full-page');
 
-  if (back_step || fullPage) {
-    transition = 'none'
-  }
-
   // Use Swiper to navigate
+  // Only use instant transition (speed=0) when explicitly requested or stepping backward
   if (swiper) {
-    if (transition === 'none') {
-      swiper.slideTo(slidenum, 0);  // instant transition
+    var useInstant = back_step || fullPage || currentSlide.hasClass('instant');
+    if (useInstant) {
+      swiper.slideTo(slidenum, 0);
     } else {
       swiper.slideTo(slidenum);
     }
   }
 
 	if (fullPage) {
-		$('#preso').css({'width' : '100%', 'overflow' : 'visible'});
+		$('#preso').css({'width' : '100%'});
 		currentSlide.css({'width' : '100%', 'text-align' : 'center', 'overflow' : 'visible'});
 	} else {
-		$('#preso').css({'width' : '', 'overflow' : ''});
+		$('#preso').css({'width' : ''});
 	}
 
 	percent = getSlidePercent()

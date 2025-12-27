@@ -1,661 +1,1933 @@
-// Showoff client-side code
-var ShowoffTracker = { };
+/* Showoff JS Logic */
 
-// Custom slide navigation system to replace jQuery Cycle
-var SlideSystem = {
-  // Current slide index
-  currentSlide: 0,
+var Showoff = {};
 
-  // Total number of slides
-  slideCount: 0,
+var preso_started = false
+var slidenum = 0
+var presenterSlideNum = null
+var slideTotal = 0
+var slides
+var currentSlide
+var totalslides = 0
+var slidesLoaded = false
+var swiper = null; // Swiper instance
+var incrSteps = 0
+var incrElem
+var incrCurr = 0
+var incrCode = false
+var debugMode = false
+var gotoSlidenum = 0
+var lastMessageGuid = 0
+var query;
+var section = 'handouts'; // default to showing handout notes for display view
+var slideStartTime = new Date().getTime()
+var activityIncomplete = false; // slides won't advance when this is on
 
-  // Transition type (fade, none, slide)
-  transition: 'fade',
+var loadSlidesBool;
 
-  // Initialize the slide system
-  init: function(options) {
-    options = options || {};
-    this.transition = options.transition || 'fade';
+var mode = { track: true, follow: true };
 
-    // Set transition class on container
-    $('#preso').addClass('transition-' + this.transition);
+// Make sure we have a sane value here
+location.root = location.root || location.pathname;
 
-    // Get all slides
-    var slides = $('#preso > .slide');
-    this.slideCount = slides.length;
+// global variable to register tours with
+var tours = {};
+var menuTourRunning = false;
 
-    // Hide all slides initially
-    slides.removeClass('slide-active').addClass('slide-inactive');
+// a dummy websocket object to make standalone presentations easier.
+var ws = {}
+ws.send = function() { /* no-op */ }
 
-    // Show the first slide
-    if (this.slideCount > 0) {
-      $(slides[0]).removeClass('slide-inactive').addClass('slide-active');
-      this.currentSlide = 0;
-    }
-
-    return this;
-  },
-
-  // Go to a specific slide
-  goTo: function(slideNum) {
-    if (slideNum < 0 || slideNum >= this.slideCount) {
-      return false;
-    }
-
-    var slides = $('#preso > .slide');
-    var currentSlide = slides.eq(this.currentSlide);
-    var targetSlide = slides.eq(slideNum);
-
-    // Remove active class from current slide
-    currentSlide.removeClass('slide-active').addClass('slide-inactive');
-
-    // Add active class to target slide
-    targetSlide.removeClass('slide-inactive').addClass('slide-active');
-
-    // Update current slide index
-    this.currentSlide = slideNum;
-
-    // Trigger an event for other components
-    $('#preso').trigger('slide-update-view');
-
-    return true;
-  },
-
-  // Go to the next slide
-  next: function() {
-    var nextSlide = (this.currentSlide + 1) % this.slideCount;
-    return this.goTo(nextSlide);
-  },
-
-  // Go to the previous slide
-  prev: function() {
-    var prevSlide = (this.currentSlide - 1 + this.slideCount) % this.slideCount;
-    return this.goTo(prevSlide);
-  },
-
-  // Resume (no-op for compatibility)
-  resume: function() {
-    // jQuery Cycle had a resume function, but we don't need it
-    // Keep it for API compatibility
-    return true;
+// since javascript doesn't have a built-in way to get to cookies easily,
+// let's just add our own data structure.
+document.cookieHash = {}
+document.cookie.split(';').forEach( function(item) {
+  var pos = item.indexOf('=');
+  var key = item.slice(0,pos).trim();
+  var val = item.slice(pos+1).trim();
+  try {
+    val = JSON.parse(val);
   }
-};
+  catch(e) { }
 
-function setupPreso(load_slides, prefix) {
-  if (typeof(prefix) == 'undefined') {
-    prefix = '';
+  document.cookieHash[key] = val;
+});
+
+$(document).on('click', 'code.execute', executeCode);
+
+function setupPreso(load_slides) {
+	if (preso_started) {
+		alert("already started");
+		return;
+	}
+	preso_started = true;
+
+  if (! cssPropertySupported('flex') ) {
+    // TODO: translate this this page!
+    window.location = 'unsupported.html';
   }
 
-  if (typeof(load_slides) == "undefined") {
-    load_slides = false;
+  if (! cssPropertySupported('zoom') ) {
+    $('body').addClass('no-zoom');
   }
 
-  paceMarker = $('#paceMarker');
-  center     = $('#center');
-  slides     = $('#slides');
+	// save our query string as an object for later use
+	query = $.parseQuery();
 
-  //load slides offscreen, wait for images and then initialize
-  if (load_slides) {
-    $("#slides").load(prefix + "slides", false, function(){
-      $("#slides img").batchImageLoad({
-        loadingCompleteCallback: initializePresentation(prefix)
-      });
-    });
-  } else {
-    $("#slides img").batchImageLoad({
-      loadingCompleteCallback: initializePresentation(prefix)
-    });
-  }
-}
-
-function initializePresentation(prefix) {
-  // unhide for height to work in static mode
-  $("#slides").show();
-
-  //center slides offscreen
-  centerSlides($('#slides > .slide'));
-
-  //copy into presentation area
-  $("#preso").empty();
-  $('#slides > .slide').appendTo($("#preso"));
-
-  //populate vars
-  slides = $('#preso > .slide');
-  slideTotal = slides.length;
-
-  //setup custom slide system
-  SlideSystem.init();
-
-  setupMenu();
-  if (slidesLoaded) {
-    showSlide();
-  } else {
-    showFirstSlide();
-    slidesLoaded = true;
-  }
-  setupSlideParamsCheck();
-
-  if(navigator.userAgent.match(/iPhone/i) || navigator.userAgent.match(/iPod/i) || navigator.userAgent.match(/iPad/i)) {
-    expandContent();
-    $('body').addClass('mobile');
-  }
-
-  $(".slide.commandline pre.term").each(function(index) {
-    $(this).addClass("ui-corner-all");
-    $(this).prepend('<div class="buttons"></div>');
-    $(this).find('.buttons').append('<div class="close"></div>');
-    $(this).find('.buttons').append('<div class="minimize"></div>');
-    $(this).find('.buttons').append('<div class="maximize"></div>');
-  });
+	// Load slides fetches images
+	loadSlidesBool = load_slides;
+	loadSlides(loadSlidesBool);
 
   setupSideMenu();
-  setupAnnotations();
-  setupTouchEvents();
+
+  // Set up the language selector
+  $('#languageSelector').change(function(e) { chooseLanguage(e.target.value); });
+  chooseLanguage(null);
+
+  doDebugStuff();
+
+	// bind event handlers
+	toggleKeybinding('on');
+
+	$('#preso').addSwipeEvents().
+//		bind('tap', swipeLeft).         // next
+		bind('swipeleft', swipeLeft).   // next
+		bind('swiperight', swipeRight); // prev
+
+  $('#buttonNav #buttonPrev').click(prevStep);
+  $('#buttonNav #buttonNext').click(nextStep);
+
+  // give us the ability to disable tracking via url parameter
+  if(query.track == 'false') mode.track = false;
+
+  // Make sure the slides always look right.
+  // Better would be dynamic calculations, but this is enough for now.
+  zoom();
+  $(window).resize(function() {zoom();});
+
+  // yes, this is a global
+  annotations = new Annotate();
+
+  // must be defined using [] syntax for a variable button name on IE.
+  var buttons = [
+    {
+      text: I18n.t('help.close'),
+      click: function() { $(this).dialog( "close" ); }
+    }
+  ];
+
+  if($("body").hasClass("presenter")) {
+    buttons.push({
+      text: I18n.t('tour.show'),
+      "class": 'right',
+      click: function() {
+        $(this).dialog( "close" );
+        showTour('showoff:presenter', false);
+      }
+    });
+  }
+  else {
+    buttons.push({
+      text: I18n.t('tour.reset'),
+      "class": 'auxillary right',
+      click: function() {
+        document.cookie="tours=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+        document.cookie="tourVersion=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+        delete document.cookieHash['tours'];
+        delete document.cookieHash['tourVersion'];
+      }
+    });
+  }
+
+  $("#help-modal").dialog({
+    autoOpen: false,
+    dialogClass: "no-close",
+    draggable: false,
+    height: 640,
+    modal: true,
+    resizable: false,
+    width: 640,
+    buttons: buttons
+  });
+
+  $("#synchronize").button();
+  $("#synchronize").click(function() {
+    synchronize();
+  });
+
+  // wait until the presentation is loaded to hook up the previews.
+  $("body").on("showoff:loaded", function (event) {
+    var target = $('#navigationHover');
+
+    $('#navigation li a.navItem').hover(function() {
+      var position = $(this).position();
+      var source   = slides.eq($(this).attr('rel'));
+
+      target.css({top: position.top, left: position.left + $('#navigation').width() + 5})
+      target.html(source.html());
+
+      copyBackground(source, target);
+
+      target.show();
+    },function() {
+      target.hide();
+    });
+  });
 
   // Open up our control socket
-  if( typeof(socketUrl) != 'undefined' ) {
-    connectControlChannel(socketUrl);
+  connectControlChannel();
+
+}
+
+function loadSlides(load_slides, reload, hard) {
+  var url = "slides";
+  if (reload) {
+    url += "?cache=clear";
   }
 
-  $(document).keydown(keyDown);
-  $(document).keyup(keyUp);
+  //load slides offscreen, wait for images and then initialize
+  $('body').addClass('busy');
+  if (load_slides) {
+    $("#slides").load(url, false, function(){
+      if(hard) {
+        location.reload(true);
+      }
+      else {
+        $("#slides img").batchImageLoad({
+          loadingCompleteCallback: initializePresentation()
+        });
+      }
+    })
+  } else {
+    $("#slides img").batchImageLoad({
+      loadingCompleteCallback: initializePresentation()
+    })
+  }
+}
 
-  // Give us the ability to disable the help on a per-slide basis with data-help='false'
-  $('.slide').each(function() {
-    if($(this).attr('data-help') === 'false') {
-      $(this).find('.help').remove();
-    }
-  });
+function initializePresentation() {
+	// unhide for height to work in static mode
+  $("#slides").show();
 
-  // Make sure the slides always get focus.
-  slides.click(function(e) {
-    if(e.target.nodeName == 'TEXTAREA' || e.target.nodeName == 'INPUT') {
-      return true;
-    } else {
-      slidenum = slides.index($(this));
-      gotoSlide(slidenum);
-      return false;
-    }
-  });
+	// Transform mermaid code blocks to divs BEFORE adding to DOM
+	// Mermaid requires content in <div class="mermaid"> not <pre><code>
+	$('#slides code.language-render-diagram').each(function() {
+		var code = $(this).text();
+		var div = $('<div class="mermaid">').text(code);
+		$(this).parent().replaceWith(div);
+	});
 
-  // left arrow, page up, shift-space
-  Mousetrap.on(['left', 'pageup', 'shift+space'], function(e) {
-    prevStep();
-    return false;
-  });
+	// Build Swiper-compatible structure
+	$("#preso").empty();
+	$("#preso").addClass('swiper');
+	var wrapper = $('<div class="swiper-wrapper"></div>');
+	$('#slides > .slide').each(function() {
+		$(this).addClass('swiper-slide');
+		wrapper.append($(this));
+	});
+	$("#preso").append(wrapper);
 
-  // right arrow, page down, space
-  Mousetrap.on(['right', 'pagedown', 'space'], function(e) {
-    nextStep();
-    return false;
-  });
+	//populate vars
+	slides = $('#preso .swiper-slide')
+	slideTotal = slides.length
 
-  // p for presenter view
-  Mousetrap.on('p', function(e) {
-    togglePresenterView();
-    return false;
-  });
+	// Initialize Swiper
+	swiper = new Swiper('#preso', {
+		speed: 300,
+		effect: 'fade',
+		fadeEffect: {
+			crossFade: true
+		},
+		allowTouchMove: false,  // disable swipe, use keyboard/buttons
+		simulateTouch: false,
+		on: {
+			slideChange: function() {
+				// Update slidenum when Swiper changes slides
+				slidenum = this.activeIndex;
+			}
+		}
+	});
 
-  // P for private notes
-  Mousetrap.on('P', function(e) {
-    togglePrivateNotes();
-    return false;
-  });
+	setupMenu();
 
-  // c for copy of notes
-  Mousetrap.on('c', function(e) {
+	if (slidesLoaded) {
+		showSlide()
+	} else {
+		showFirstSlide();
+		slidesLoaded = true
+	}
+	setupSlideParamsCheck();
+
+  // Remove spinner in case we're reloading
+  $('body').removeClass('busy');
+
+  $('pre.highlight code').each(function(i, block) {
     try {
-      var notes = getCurrentNotes();
-      navigator.clipboard.writeText(notes).then(function() {
-        console.log('Content copied to clipboard');
-        /* success */
-      }, function() {
-        console.log('Failed to copy');
-        /* failure */
-      });
+      // syntax highlight the code
+      hljs.highlightElement(block);
+
+      // then add focus on any lines marked
+      highlightLines(block);
+
+      if($(block).hasClass('numbers')) {
+        hljs.lineNumbersBlock(block);
+      }
+
     } catch(e) {
-      console.log('Failed to copy');
+      console.log('Syntax highlighting failed on ' + $(this).closest('div.slide').attr('id'));
+      console.log('Syntax highlighting failed for ' + $(this).attr('class'));
       console.log(e);
     }
-    return false;
   });
 
-  // f for footer
-  Mousetrap.on('f', function(e) {
-    toggleFooter();
-    return false;
+  $(".content form").submit(function(e) {
+    e.preventDefault();
+    submitForm($(this));
   });
 
-  // h for help
-  Mousetrap.on('h', function(e) {
-    toggleHelp();
-    return false;
+  // suspend hotkey handling
+  $(".content form :input").focus( function() {
+    toggleKeybinding();
+  });
+  $(".content form :input").blur( function() {
+    toggleKeybinding();
   });
 
-  // n for notes
-  Mousetrap.on('n', function(e) {
-    toggleSlideNotes();
-    return false;
+  $(".content form :input").change(function(e) {
+    enableForm($(this));
   });
 
-  // s for style
-  Mousetrap.on('s', function(e) {
-    toggleStyle();
-    return false;
-  });
+  $(".content form div.tools input.display").click(function(e) {
+    var form   = $(this).closest('form');
+    var formID = form.attr('id');
 
-  // z for zoom
-  Mousetrap.on('z', function(e) {
-    toggleZoom();
-    return false;
-  });
-
-  // i for inkscape on an svg slide
-  Mousetrap.on('i', function(e) {
-    inkscapeView();
-    return false;
-  });
-
-  // b for blank, white screen
-  Mousetrap.on('b', function(e) {
-    blankScreen();
-    return false;
-  });
-
-  // Unset the generated 'Mousetrap' class
-  $('.mousetrap').removeClass('mousetrap');
-
-  // Sync the stage to the slide the presenter is on
-  postSlide();
-
-  // Explicitly call resize() to make sure that all slides
-  // are properly aligned in the window.
-  $(window).resize();
-
-  // Hook up Mermaid diagrams
-  mermaid.initialize({startOnLoad:true});
-  mermaid.init(undefined, ".mermaid");
-
-  // Bind to events for the presenter view
-  if( typeof(presenterView) != 'undefined' ) {
-    var currentSlide = 0;
-    var iframe = document.getElementById("nextSlide");
-    var iframeWin = iframe.contentWindow || iframe;
-    var nextSlideEvents = ["next", "prev"];
-    for(var i = 0; i < nextSlideEvents.length; i++) {
-      var eventName = nextSlideEvents[i];
-      iframeWin.addEventListener("showoff:slide:"+eventName, function(e) {
-        var slide = e.detail.slide;
-        if(slide != currentSlide) {
-          currentSlide = slide;
-          var nextSlideNum = (currentSlide + 1) % slideTotal;
-          var nextSlide = slides.eq(nextSlideNum);
-          var notes = nextSlide.find("div.notes");
-          var notesText = notes.text();
-          if(notesText == '') {
-            notesText = nextSlide.find("div.notes-section").text();
-          }
-          if(notesText == '') {
-            notesText = I18n.t('presenter.nonotes');
-          }
-          $("#notesText").text(notesText);
-        }
-      });
+    ws.send(JSON.stringify({ message: 'answerkey', formID: formID}));
+    try {
+      // If we're a presenter, try to bust open the slave display
+      slaveWindow.renderForm(formID);
     }
+    catch (e) {
+      console.log(e);
+      renderForm(form);
+    }
+  });
+
+  $('.slide.activity .activityToggle input.activity').checkboxradio();
+  $('.slide.activity .activityToggle input.activity').change(toggleComplete);
+
+  // initialize mermaid, but don't render yet since the slide sizes are indeterminate
+  mermaid.initialize({startOnLoad:false});
+
+  // translate SVG images, inlining them first if needed.
+  $('img').simpleStrings({strings: user_translations});
+  $('svg').simpleStrings({strings: user_translations});
+  $('.translate').simpleStrings({strings: user_translations});
+
+  $("#preso").trigger("showoff:loaded");
+}
+
+function copyBackground(source, target) {
+  // to get this to properly copy over in Firefox, we need to iterate each property instead of using shorthand
+  ['background-color',
+   'background-image',
+   'background-repeat',
+   'background-position',
+   'background-attachment'].forEach(function(property) {
+    target.css(property, source.css(property));
+  })
+
+  // we have to do this separately so we can transform it
+  var bgsize = source.css('background-size');
+
+  var regex = /^(\d+)(\S{1,2})(?: (\d+)(\S{1,2}))?$/;
+  var match = regex.exec(bgsize);
+  if(match) {
+    var width  = match[1];
+    var unit_w = match[2];
+    var height = match[3] || '';
+    var unit_h = match[4] || '';
+
+    if(unit_w != '%'                 ) { width  /= 2 };
+    if(unit_h != '%' && height != '' ) { height /= 2 };
+
+    target.css('background-size', width+unit_w+' '+height+unit_h);
+  }
+  else {
+    // contain, cover, etc
+    target.css('background-size', bgsize);
   }
 }
 
-function centerSlides(slides) {
-  slides.each(function(s, slide) {
-    centerSlide(slide);
-  });
-}
+function zoom(presenter) {
+  var preso = $("#preso");
+  var hSlide = parseFloat(preso.height());
+  var wSlide = parseFloat(preso.width());
+  var hBody  = parseFloat(preso.parent().height());
+  var wBody  = parseFloat(preso.parent().width());
 
-function centerSlide(slide) {
-  var slide_content = $(slide).find(".content").first();
-  var height = slide_content.height();
-  var mar_top = (0.5 * parseFloat($(slide).height())) - (0.5 * parseFloat(height));
-  if (mar_top < 0) {
-    mar_top = 0;
+  var newZoom = Math.min(hBody/hSlide, wBody/wSlide);
+
+  // match the 65/35 split in the stylesheet for the side-by-side layout
+  if($("#preview").hasClass("beside")) {
+    wBody  *= 0.64;
+    newZoom = Math.min(hBody/hSlide, wBody/wSlide);
   }
-  slide_content.css('margin-top', mar_top);
+
+  // Calculate margins to center the thing *before* scaling
+  // Vertically center on presenter, top align everywhere else
+  if(presenter) {
+    var hMargin = (hBody - hSlide) /2;
+  }
+  else {
+    // (center of slide to top) - (half of the zoomed slide)
+    //var hMargin = (hSlide/2 * newZoom) - (hSlide / 2);
+    var hMargin = (hSlide * newZoom - hSlide) / 2;
+  }
+  var wMargin = (wBody - wSlide) /2;
+
+  preso.css("margin", hMargin + "px " + wMargin + "px");
+  preso.css("transform", "scale(" + newZoom + ")");
+
+  // correct the zoom factor for the presenter
+  if (presenter) {
+    // We only want to zoom if the canvas is actually zoomed. Firefox and IE
+    // should *not* be zoomed, so we want to exclude them. We do that by reading
+    // back the zoom property. It will return a string percentage in IE, which
+    // won't parse as a number, and Firefox simply returns undefined.
+    // Because reasons.
+
+    // TODO: When we fix the presenter on IE so the viewport isn't all wack, we
+    // may have to revisit this.
+    var zoomLevel = Number( preso.css('zoom') ) || 1;
+    annotations.zoom = 1 / zoomLevel
+  }
 }
 
-function setupMenu() {
-  $('#navmenu').hide();
+function openMenu() {
+  toggleKeybinding();
+  $('#feedbackSidebar').show();
+  // if the menu tour is open, make it harder to lose the menu
+  if(! menuTourRunning ) {
+    $('#sidebarExit').show();
+  }
+}
 
-  var menuHTML = '';
-  var slidesHTML = '';
-
-  slides.each(function(s, slide) {
-    var slideTitle = $(slide).find(".content").find("h1").text();
-    if (slideTitle) {
-      menuHTML += '<div class="menu-toc-list"><a class="menu-toc-link" href="#' + (s+1) + '"><span class="menu-toc-slide-number">' + (s+1) + '.</span><span class="menu-toc-slide-title">' + slideTitle + '</span></a></div>';
-      slidesHTML += '<div class="menu-slide-link"><a class="menu-slide-number" href="#' + (s+1) + '">' + (s+1) + '</a></div>';
-    }
-  });
-
-  $('#navigation').html(slidesHTML);
-  $('#menu-toc').html(menuHTML);
-
-  $('#menu-toc .menu-toc-link').click(function(e) {
-    e.preventDefault();
-    gotoSlide(parseInt($(this).attr('href').substr(1) - 1));
-    toggleSideMenu();
-  });
-
-  $('#navigation .menu-slide-number').click(function(e) {
-    e.preventDefault();
-    gotoSlide(parseInt($(this).attr('href').substr(1) - 1));
-    toggleSideMenu();
-  });
-
-  $("#close-menu").click(function() {
-    toggleSideMenu();
-  });
-
-  // include the language selector if we have multiple languages
-  if(typeof(cookieLanguage) != 'undefined') {
-    var langDrop = $("#language-dropdown");
-    langDrop.empty();
-    for(var i=0; i < languages.length; i++) {
-      var lang = languages[i];
-      langDrop.append('<li><a href="javascript:setLanguage(\''+lang+'\')" class="'+lang+'">'+lang+'</a></li>');
-    }
+function closeMenu(force) {
+  if(! menuTourRunning || force ) {
+    $('#feedbackSidebar, #sidebarExit').hide();
+    toggleKeybinding('on');
   }
 }
 
 function setupSideMenu() {
   $("#hamburger").click(function() {
-    toggleSideMenu();
+    openMenu();
   });
+
+  $("#navToggle").click(function() {
+    $("#navigation").toggle();
+    updateMenuChevrons();
+  });
+
+  $('#fileDownloads').click(function() {
+    closeMenu();
+    window.open('download');
+  })
+
+  $("#paceSlower").click(function() {
+    sendPace('slower');
+  });
+
+  $("#paceFaster").click(function() {
+    sendPace('faster');
+  });
+
+  $('#questionToggle').click(function() {
+    if ( ! $(this).hasClass('disabled') ) {
+      $('#questionSubmenu').toggle();
+    }
+  });
+  $("#askQuestion").click(function() {
+    if ( ! $(this).hasClass('disabled') ) {
+      var question = $("#question").val()
+      var qid = askQuestion(question);
+
+      feedback_response(this, I18n.t('menu.sending'));
+      $("#question").val('');
+
+      var questionItem = $('<li/>').text(question).attr('id', qid);
+      questionItem.click( function(e) {
+        cancelQuestion($(this).attr('id'));
+        $(this).remove();
+      });
+      $("#askedQuestions").append(questionItem);
+    }
+  });
+
+  $('#feedbackToggle').click(function() {
+    if ( ! $(this).hasClass('disabled') ) {
+      $('#feedbackSubmenu').toggle();
+    }
+  });
+  $("#sendFeedback").click(function() {
+    if ( ! $(this).hasClass('disabled') ) {
+      sendFeedback($( "input:radio[name=rating]:checked" ).val(), $("#feedback").val());
+      feedback_response(this, "Sending...");
+      $("#feedback").val('');
+    }
+  });
+
+  $("#editSlide").click(function() {
+    editSlide();
+    closeMenu();
+  });
+
+  $('#clearAnnotations').click(function() {
+    annotations.erase();
+  });
+
+  $('#closeMenu, #sidebarExit').click(function() {
+    closeMenu();
+  });
+
+  function feedback_response(elem, response) {
+    var originalText = $(elem).text();
+    $(elem).text(response);
+    window.setTimeout(function() {
+      $(elem).parent().hide();
+      closeMenu();
+      $(elem).text(originalText);
+    }, 1000);
+  }
 }
 
-function toggleSideMenu() {
-  if($("#sideMenu").is(':visible')) {
-    $("#sideMenu").hide();
-    $("#main").css("margin-left", "0");
-    $("#main").css("padding-left", "10px");
-    $("#hamburger").css("margin-left", "0");
+function updateQuestionIndicator(count) {
+  if(count == 0) {
+    $('#questionsIndicator').hide();
   }
   else {
-    $("#sideMenu").show();
-    $("#main").css("margin-left", "240px");
-    $("#main").css("padding-left", "20px");
-    $("#hamburger").css("margin-left", "240px");
+    $('#questionsIndicator').show();
+    $('#questionsIndicator').text(count);
   }
 }
 
-function toggleZoom() {
-  if($("#preso").hasClass('zoomed')) {
-    $("#preso").removeClass('zoomed');
-    $("#zoomer").hide();
-  }
-  else {
-    $("#preso").addClass('zoomed');
-    $("#zoomer").show();
-  }
+function updateMenuChevrons() {
+  $(".navSection + ul:not(:visible)")
+      .siblings('a')
+      .children('i')
+      .attr('class', 'fa fa-angle-down');
+
+  $(".navSection + ul:visible")
+      .siblings('a')
+      .children('i')
+      .attr('class', 'fa fa-angle-up');
 }
 
-function blankScreen() {
-  if($("body").hasClass('blanked')) {
-    $("body").removeClass('blanked');
-  }
-  else {
-    $("body").addClass('blanked');
-  }
-}
+function setupMenu() {
+  var nav = $("<ul>"),
+      currentSection = '',
+      sectionUL = '';
 
-function inkscapeView() {
-  if($("#preso").hasClass('inkscaped')) {
-    $("#preso").removeClass('inkscaped');
-    $("#main").show();
-    $("#hamburger").show();
-  }
-  else {
-    $("#preso").addClass('inkscaped');
-    $("#main").hide();
-    $("#hamburger").hide();
-  }
-}
+  slides.each(function(s, slide){
+    var slidePath = $(slide).attr('data-section');
+    var headers = $(slide).children("h1, h2");
+    var slideTitle = '';
+    var content;
 
-function setupTouchEvents() {
-  var orgX, newX;
-  var tracking = false;
+    if (currentSection !== slidePath) {
+      currentSection = slidePath;
+      var newSection  = $("<li>");
+      var icon        = $('<i>')
+        .addClass('fa fa-angle-down');
+      var sectionLink = $("<a>")
+        .addClass('navSection')
+        .attr('href', '#')
+        .text(slidePath)
+        .append(icon)
+        .click(function() {
+          $(this).next().toggle();
+          updateMenuChevrons();
 
-  var db = document.body;
-  db.addEventListener("touchstart", start, false);
-  db.addEventListener("touchmove", move, false);
+          if( $(this).parent().is(':last-child') ) {
+            $(this).next().children('li').first()[0].scrollIntoView();
+          }
 
-  function start(e) {
-    orgX = e.changedTouches[0].pageX;
-    tracking = true;
-  }
+          return false;
+        });
+      sectionUL = $("<ul>");
+      newSection.append(sectionLink, sectionUL);
+      nav.append(newSection);
+    }
 
-  function move(e) {
-    if(!tracking) return;
-    newX = e.changedTouches[0].pageX;
-    if(orgX - newX > 100) {
-      tracking = false;
-      nextStep();
+    // look for first header to use as a title
+    if (headers.length > 0) {
+      slideTitle = headers.first().text();
+
     } else {
-      if(orgX - newX < -100) {
-        tracking = false;
-        prevStep();
+      // if no header, look at the first non-empty line of content
+      content    = $(slide).find(".content");
+      slideTitle = content.text().split("\n").filter(Boolean)[0] || ''; // split() gives us an empty array when there's no content.
+
+      // just in case we've got any extra whitespace around.
+      slideTitle = slideTitle.trim();
+
+      // if no content (like photo only) fall back to slide name
+      if (slideTitle == "") {
+        slideTitle = content.attr('ref').split('/').pop();
       }
     }
+
+    var navLink = $("<a>")
+      .addClass('navItem')
+      .attr('rel', s)
+      .attr('href', '#')
+      .text((s + 1) + ". " + slideTitle)
+      .click(function() {
+          gotoSlide(s);
+          if (typeof slaveWindow !== 'undefined' && slaveWindow !== null) {
+              slaveWindow.gotoSlide(s, false);
+              postSlide();
+              update();
+          }
+          return false;
+      });
+    var navItem = $("<li>").append(navLink);
+
+    sectionUL.append(navItem);
+  });
+
+  // can't use .children.replaceWith() because this starts out empty...
+  $("#navigation").empty();
+  $("#navigation").append(nav);
+}
+
+
+// this function generates an object that consumes the JSON form of translations
+// provided by the i18n gem. It provides pretty nearly the same calling syntax
+// as the Ruby library's dot-form.
+//
+// var I18n = new translation(data);
+// console.log(I18n.t('some.key.to.translate'));
+function translation(data) {
+  this.localized = data;
+  this.translate = function(key) {
+    var item = this.localized;
+    try {
+      key.split('.').forEach(function(val) {
+        item = item[val];
+      });
+      if(typeof(item) != 'string') {
+        item = null;
+      }
+    }
+    catch(e) {
+      item = null;
+    }
+    return item || ("No translation for " + key);
+  }
+  this.t = function(key) { return this.translate(key); }
+}
+
+function chooseLanguage(locale) {
+  // yay for half-baked data storage schemes
+  newlocale = locale || document.cookieHash['locale'] || 'auto';
+
+  if(locale){
+    document.cookie = "locale="+newlocale;
+    location.reload(false);
+  } else {
+    $('#languageSelector').val(newlocale);
+  }
+}
+
+// at some point this should get more sophisticated. Our needs are pretty minimal so far.
+function clearCookies() {
+  document.cookie = "sidebar=;expires=Thu, 21 Sep 1979 00:00:01 UTC;";
+  document.cookie = "locale=;expires=Thu, 21 Sep 1979 00:00:01 UTC;";
+  document.cookie = "layout=;expires=Thu, 21 Sep 1979 00:00:01 UTC;";
+  document.cookie = "notes=;expires=Thu, 21 Sep 1979 00:00:01 UTC;";
+  document.cookie = "tourVersion=;expires=Thu, 21 Sep 1979 00:00:01 UTC;";
+  document.cookie = "presenter=;expires=Thu, 21 Sep 1979 00:00:01 UTC;";
+  document.cookieHash = {};
+}
+
+// called when slides with special content are displayed. (like the Activity complete toggle)
+// Show a "welcome intro" the first time it's seen.
+function showTour(name, record) {
+  record = (typeof record == 'undefined' ? true : record) // default true
+
+  // we don't need to show tours if we're a display view
+  if('presenterView' in window) {
+    return false;
+  }
+
+  // don't blow up if someone calls a missing tour
+  if(!(name in tours)) {
+    console.log('No such tour: '+name);
+    return false;
+  }
+
+  var clientTours = document.cookieHash['tours'] || [];
+
+  // if we haven't seen this one before...
+  if(clientTours.indexOf(name) == -1) {
+    toggleKeybinding('off');
+
+    var steps = tours[name] || [];
+
+    var intro = introJs();
+    intro.setOptions({
+      showStepNumbers: false,
+      showBullets: false,
+      steps: steps
+    });
+
+    if(steps.length > 1) {
+      intro.setOption("showBullets", true);
+    }
+
+    intro.onexit(function() {
+      toggleKeybinding('on');
+
+      if(menuTourRunning) {
+        menuTourRunning = false;
+        $("#hamburger").off('click', null, introNext);
+        $("#closeMenu").off('click', null, introClose);
+        closeMenu();
+      }
+    });
+
+    // record tour completion so we don't continue to annoy people
+    intro.oncomplete(function() {
+      if(record) {
+        clientTours.push(name);
+        document.cookieHash['tours'] = clientTours;
+        document.cookie = "tours="+JSON.stringify(clientTours)+"; max-age=31536000; path=/;";
+      }
+
+      // this keeps track of the version of the presenter tour we've seen
+      if(name == 'showoff:presenter:auto') {
+        document.cookie = "tourVersion="+tourVersion+"; max-age=31536000; path=/;";
+        document.cookieHash['tourVersion'] = tourVersion;
+
+        // we don't need this anymore; let's save a byte or three
+        delete tours['showoff:presenter:auto'];
+      }
+
+    });
+
+    // if we're showing the menu, we need to do some extra bookeeping to make it usable
+    if(name == 'showoff:menu') {
+      menuTourRunning = true;
+
+      // A couple helper functions to add to the menu bindings.
+      // We have to do it here because 'intro' is in scope
+      var introNext  = function() { intro.nextStep() };
+      var introClose = function() { intro.exit()     };
+
+      $("#hamburger").on('click', null, introNext);
+      $("#closeMenu").on('click', null, introClose);
+
+      intro.onchange(function(targetElement) {
+        switch(intro._currentStep) {
+          case 0:
+            closeMenu(true);
+            break;
+
+          case 1:
+            openMenu();
+            break;
+        }
+      });
+
+      // keep the menu visible. This is a hack, but I don't see a better way.
+      intro.onafterchange(function(targetElement) {
+        $("#feedbackSidebar").removeClass('introjs-fixParent');
+      });
+    }
+
+    intro.start();
+  }
+}
+
+// get the value of an option=value class applied to a slide
+function getSlideOption(option) {
+  var classes = currentSlide.attr('class').split(' ');
+
+  for (var i=0; i < classes.length; i++) {
+    var item = classes[i].split('=');
+    if(item.length == 2 && item[0] == option) {
+      return item[1]
+    }
+  }
+}
+
+function checkSlideParameter() {
+	if (slideParam = currentSlideFromParams()) {
+		slidenum = slideParam;
+	}
+}
+
+function currentSlideFromName(name) {
+  var count = 0;
+  if(name.length > 0 ) {
+  	slides.each(function(s, slide) {
+      if (name == $(slide).attr("id") ) {
+        found = count;
+        return false;
+      }
+  	  if (name == $(slide).find(".content").attr("ref") ) {
+  	    found = count;
+  	    return false;
+  	  }
+      var dataSection = $(slide).attr("data-section").toLowerCase();
+      // firstText is usually a header for the slide
+      var firstText = $(slide).find(".content :first").text().replace(/[\W]+/g, '-').replace(/-+$/, '').toLowerCase();
+      var decodedName = decodeURIComponent(name).toLowerCase();
+      if (decodedName == dataSection+'/'+firstText
+          || name == dataSection
+          || decodedName == firstText  ) {
+        found = count;
+        return false;
+      }
+  	  count++;
+  	});
+	}
+	return count;
+}
+
+function currentSlideFromParams() {
+	var result;
+	// Match numeric slide hashes: #241
+	if (result = window.location.hash.match(/^#([0-9]+)$/)) {
+		return result[1] - 1;
+	}
+	// Match slide, with optional internal mark: #slideName(+internal)
+	else if (result = window.location.hash.match(/^#([^+]+)\+?(.*)?$/)) {
+	  return currentSlideFromName(result[1]);
   }
 }
 
 function setupSlideParamsCheck() {
-  var hash = window.location.hash;
-  if (hash !== "") {
-    var ss = hash.substr(1);
-    if (typeof(slideParam[ss]) != 'undefined') {
-      gotoSlide(slideParam[ss]);
-    } else if (ss.match(/^[0-9]+$/)) {
-      gotoSlide(parseInt(ss) - 1);
+	var check = function() {
+		var currentSlide = currentSlideFromParams();
+		if (!isNaN(currentSlide) && slidenum != currentSlide) {
+			slidenum = currentSlide;
+			showSlide();
+		}
+		setTimeout(check, 100);
+	}
+	setTimeout(check, 100);
+}
+
+function gotoSlide(slideNum, updatepv) {
+  var newslide = parseInt(slideNum);
+  if (slidenum != newslide && !isNaN(newslide)) {
+    var back = (newslide == (slidenum - 1))
+    slidenum = newslide;
+    showSlide(back, updatepv);
+  }
+}
+
+function showFirstSlide() {
+	slidenum = 0
+	checkSlideParameter();
+	showSlide()
+}
+
+function showSlide(back_step, updatepv) {
+  // allows the master presenter view to disable the update callback
+  updatepv = (typeof(updatepv) === 'undefined') ? true : updatepv;
+
+	if(slidenum < 0) {
+		slidenum = 0
+		return
+	}
+
+	if(slidenum > (slideTotal - 1)) {
+		slidenum = slideTotal - 1
+		return
+	}
+
+  // stop annotations on old slide if we're a presenter
+  if(currentSlide && typeof slaveWindow !== 'undefined') {
+    currentSlide.find('canvas.annotations').first().stopAnnotation();
+  }
+
+  if(currentSlide) { currentSlide.removeClass('currentSlide') };
+  currentSlide = slides.eq(slidenum)
+  currentSlide.addClass('currentSlide');
+
+  var transition = currentSlide.attr('data-transition')
+  var fullPage = currentSlide.find(".content").is('.full-page');
+
+  if (back_step || fullPage) {
+    transition = 'none'
+  }
+
+  // Use Swiper to navigate
+  if (swiper) {
+    if (transition === 'none') {
+      swiper.slideTo(slidenum, 0);  // instant transition
+    } else {
+      swiper.slideTo(slidenum);
     }
   }
-}
 
-function getSlideProgress() {
-  var current = currentSlideFromParams();
-  if(current) {
-    return current + '/' + slideTotal;
+	if (fullPage) {
+		$('#preso').css({'width' : '100%', 'overflow' : 'visible'});
+		currentSlide.css({'width' : '100%', 'text-align' : 'center', 'overflow' : 'visible'});
+	} else {
+		$('#preso').css({'width' : '', 'overflow' : ''});
+	}
+
+	percent = getSlidePercent()
+	$("#slideInfo").text((slidenum + 1) + '/' + slideTotal + '	- ' + percent + '%')
+
+	if(!back_step) {
+		// determine if there are incremental bullets to show
+		// unless we are moving backward
+		determineIncremental()
+	} else {
+		incrCurr = 0
+		incrSteps = 0
+	}
+	location.hash = slidenum + 1;
+
+	removeResults();
+
+  var currentContent = $(currentSlide).find(".content")
+	currentContent.trigger("showoff:show");
+
+	var ret = setCurrentNotes();
+
+	var fileName = currentSlide.children('div').first().attr('ref');
+  $('#slideFilename').text(fileName);
+
+  if (query.next) {
+    $(currentSlide).find('li').removeClass('hidden');
   }
-  return (slidenum + 1) + '/' + slideTotal
-}
 
-function currentSlideFromParams() {
-  var hash = window.location.hash;
-  if (hash == "") {
-    return null;
-  }
-  return parseInt(hash.substr(1));
-}
-
-function toggleFooter() {
-  $('#footer').toggle();
-}
-
-function toggleHelp() {
-  $('#help').toggle();
-}
-
-function togglePresenterView() {
-  $('#presenter-view').toggle();
-}
-
-function togglePrivateNotes() {
-  $('#private-notes').toggle();
-}
-
-function toggleSlideNotes() {
-  $('#notes').toggle();
-}
-
-function setLanguage(lang) {
-  cookieLanguage = lang;
-  document.cookie = "language=" + lang;
-  location.reload();
-}
-
-function toggleStyle() {
-  $('link[rel="stylesheet"]').map(function() {
-    var href = $(this).attr('href');
-    var re = new RegExp("styles/([^\/]+)\.css");
-    var arr = re.exec(href);
-    if(arr && arr.length > 1) {
-      var style = arr[1];
-      var newStyle;
-      if(style == 'primary') {
-        newStyle = 'secondary';
-      }
-      else {
-        newStyle = 'primary';
-      }
-      $(this).attr('href', 'styles/'+newStyle+'.css');
+  if (typeof annotations !== 'undefined') {
+    if(typeof slaveWindow == 'undefined') {
+      // hook up the annotations for viewing
+      currentSlide.find('canvas.annotations').annotationListener(annotations);
     }
+    else {
+      if (mode.annotations) {
+        currentSlide.find('canvas.annotations').annotate(annotations);
+      }
+    }
+  }
+
+  // if we're a slave/display window
+  if('presenterView' in window) {
+    var pv = window.presenterView;
+
+    // Update presenter view, if it's tracking us
+    if (updatepv) {
+      pv.slidenum  = slidenum;
+      pv.incrCurr  = incrCurr
+      pv.incrSteps = incrSteps
+
+      pv.showSlide(true);
+      pv.postSlide();
+      pv.update();
+    }
+
+    // if the slide is marked to autoplay videos, then fire them off!
+    if(currentSlide.hasClass('autoplay')) {
+      console.log('Autoplaying ' + currentSlide.attr('id'))
+      setTimeout(function(){
+        $(currentSlide).find('video').each(function() {
+          $(this).get(0).play();
+        });
+      }, 1000);
+    }
+  }
+
+  // Update nav
+  $('.highlighted').removeClass('highlighted');
+  $('#navigation ul ul').hide();
+
+  var active = $(".navItem").get(slidenum);
+  $(active).parent().addClass('highlighted');
+  $(active).parent().parent().show();
+
+  updateMenuChevrons();
+
+  // copy notes to the notes field for mobile.
+  postSlide();
+
+  // is this an activity slide that has not yet been marked complete?
+  if (currentSlide.hasClass('activity')) {
+     if (currentSlide.find('input.activity').is(":checked")) {
+      activityIncomplete = false;
+      sendActivityStatus(true);
+    }
+    else {
+      activityIncomplete = true;
+      sendActivityStatus(false);
+    }
+  }
+  else {
+    activityIncomplete = false;
+  }
+
+  if(autoTour) {
+    if(currentSlide.hasClass('activity')) {
+      showTour('showoff:activity');
+    }
+    if(getSlideOption('form')) {
+      showTour('showoff:form');
+    }
+    var tour = getSlideOption('tour');
+    if(tour) {
+      showTour(tour);
+    }
+  }
+
+  // show the sync button if we're not on the same slide as the presenter
+  checkSyncState();
+
+  // make all bigly text tremendous
+  currentSlide.children('.content.bigtext').bigtext();
+
+  // render any diagrams on the slide
+  var mermaidDivs = currentSlide.find('div.mermaid:not([data-processed])');
+  if (mermaidDivs.length > 0) {
+    mermaid.init(undefined, mermaidDivs);
+  }
+
+  return ret;
+}
+
+function getSlideProgress()
+{
+	return (slidenum + 1) + '/' + slideTotal
+}
+
+function getAllSections()
+{
+  memo = []
+  $("div.notes-section").each(function() {
+    section = $(this).attr('class').split(' ').filter(function(x) { return x != 'notes-section'; })[0];
+    if(! memo.includes(section)) { memo.push(section) }
+  });
+  return memo
+}
+
+function getCurrentSections()
+{
+  return currentSlide.find("div.notes-section").map(function() {
+    return $(this).attr('class').split(' ').filter(function(x) { return x != 'notes-section'; });
   });
 }
 
-function showSlide(back_step, incr) {
-
-  // allows the back_step parameter to be optional
-  if (typeof(back_step) == 'undefined') {
-    back_step = false;
-  }
-  if (typeof(incr) == 'undefined') {
-    incr = 0;
-  }
-
-  // remember where we should be
-  slidenum = parseInt(slidenum) + incr;
-
-  // before going to the next slide, set up our call to showSlide for after this slide loads
-  if(incr > 0) {
-    $("#preso").on("slide-before", function(e, opts) {
-      var nextS = $(e.target).find("div.slide").eq(opts.nextSlide);
-      $(nextS).on("slide-added", function() {
-        $(nextS).off("slide-added");
-        showSlide(true);
-      });
-    });
-  }
-
-  // load the slide content
-  loadSlideContent();
-
-  // navigate to slide
-  SlideSystem.goTo(slidenum);
-
-  if (back_step) {
-    $(".incremental").each(function() {
-      var elem = $(this);
-      if (elem.hasClass('to-show') || elem.hasClass('to-hide')) {
-        elem.removeClass('to-show');
-        elem.removeClass('to-hide');
-        elem.addClass('hidden');
-      }
-    });
-  }
-
-  slidenum = $("#preso").find('.slide.slide-active').attr('snum');
-  if(!back_step) {
-    // update slide state
-    showSlideNumbers(slidenum);
-    loadSlideContent();
-    postSlide();
-  }
-
-  // copy slide content to presenter view
-  if(typeof(presenterView) != 'undefined') {
-    var pv = $("#presenterView");
-    var title = $("#preso .slide.slide-active h1").text();
-    pv.find(".preso-title").text(title);
-    var notes = getCurrentNotes();
-    pv.find(".preso-notes").text(notes);
-  }
-
-  // Update presenter view, if we spawned one
-  if (typeof(slaveWindow) != 'undefined' && slaveWindow != null) {
-    // set the notes for this slide in the presenter view
-    var notes = getCurrentNotes();
-    slaveWindow.postMessage('notes:'+notes, '*');
-  }
-
-  // Update presenter view, if we are a slave
-  if(typeof(master) != 'undefined' && master == false) {
-    var notes = getCurrentNotes();
-    var detail = {slide: slidenum, notes: notes};
-    window.parent.postMessage('notes:'+notes, '*');
-    window.parent.postMessage('slide:'+slidenum, '*');
-    window.parent.postMessage('slideEvent:showoff:slide:next', '*');
-  }
-
-  // Update presenter view, if we are a master
-  if(typeof(presenterView) != 'undefined') {
-    var iframe = document.getElementById("nextSlide");
-    var iframeWin = iframe.contentWindow || iframe;
-    var detail = {slide: slidenum};
-    iframeWin.postMessage('showoff:slide:next', '*', detail);
-  }
-
-  $("#paceMarker").fadeOut();
+function setCurrentSection(newSection)
+{
+  section = newSection;
+  postSlide();
 }
 
-function getCurrentNotes() {
-  var notes = $("#preso .slide.slide-active div.notes").text();
-  if(notes == '') {
-    notes = $("#preso .slide.slide-active div.notes-section").text();
-  }
-  if(notes == '') {
-    notes = I18n.t('presenter.nonotes');
-  }
-  return notes;
+function getCurrentNotes()
+{
+    var notes = currentSlide.find("div.notes-section."+section);
+    return notes;
 }
 
-function showSlideNumbers(num) {
-  $('#slideInfo').text((num+1) + '/' + slideTotal);
-  if(typeof(presenterView) != 'undefined') {
-    var pv = $("#presenterView");
-    pv.find(".slideInfo").text((num+1) + '/' + slideTotal);
-  }
+function getCurrentNotesText()
+{
+    var notes = getCurrentNotes();
+    return notes.text();
 }
 
-function loadSlideContent() {
-  var url = loadSlideUrl();
-  if(url) {
-    var slide = $("#preso .slide.slide-active");
-    slide.load(url, function() {
-      slide.find('pre.highlight code').each(function(i, e) {
-        hljs.highlightElement(e);
-        hljs.lineNumbersBlock(e);
-      });
-      centerSlide(slide);
-      mermaid.init(undefined, ".mermaid");
+function setCurrentNotes()
+{
+    var notes = getCurrentNotesText();
+    $('#notesInfo').text(notes);
+    return notes;
+}
+
+function getSlidePercent()
+{
+	return Math.ceil(((slidenum + 1) / slideTotal) * 100)
+}
+
+function determineIncremental()
+{
+	incrCurr = 0
+	incrCode = false
+	incrElem = currentSlide.find(".incremental li")
+	incrSteps = incrElem.length
+	if(incrSteps == 0) {
+		// also look for commandline
+		incrElem = currentSlide.find(".incremental > pre > code > code")
+		incrSteps = incrElem.length
+		incrCode = true
+	}
+	incrElem.each(function(s, elem) {
+		$(elem).addClass('incremental hidden');
+	})
+}
+
+function showIncremental(incr)
+{
+		elem = incrElem.eq(incrCurr);
+		if (incrCode && elem.hasClass('command')) {
+			incrElem.eq(incrCurr).removeClass('hidden').jTypeWriter({duration:1.0});
+		} else {
+			incrElem.eq(incrCurr).removeClass('hidden');
+		}
+}
+
+// focus highlight requested lines of a given code block
+function highlightLines(block) {
+  block.innerHTML = block.innerHTML.split(/\r?\n/).map(function (line, i) {
+    if (line.indexOf('* ') === 0) {
+      return line.replace(/^\*(.*)$/, '<div class="highlightedLine">$1</div>');
+    }
+
+    return line;
+  }).join('\n');
+}
+
+// form handling
+function submitForm(form) {
+  if(validateForm(form)) {
+    var dataString = form.serialize();
+    var formAction = form.attr("action");
+
+    $.post(formAction, dataString, function( data ) {
+      var submit = form.find("input[type=submit]")
+      submit.attr("disabled", "disabled");
+      submit.removeClass("dirty");
+
+      // stop blocking follow mode
+      activityIncomplete = false;
+      getPosition();
     });
   }
 }
 
-function loadSlideUrl() {
-  var slide = $("#preso .slide.slide-active");
-  var url = slide.attr('ref');
-  if(url) {
-    if(url.match(/^http/)) {
-      slide.find('iframe').attr('src', url);
-      return null;
+function validateForm(form) {
+  var success = true;
+
+  form.children('div.form.element.required').each(function() {
+    var count  = $(this).find(':input:checked').length;
+    var value  = $.trim($(this).children('input:text, textarea, select').first().val());
+
+    // if we have no checked inputs or content, then flag it
+    if(count || (value && value)) {
+      $(this).closest('div.form.element').removeClass('warning');
     }
     else {
-      return url;
+      $(this).closest('div.form.element').addClass('warning');
+      success = false;
     }
-  }
-  return null;
+
+  });
+
+  return success;
 }
 
-function runCode(lang, codeDiv) {
-  var result;
+function enableForm(element) {
+  var submit = element.closest('form').find(':submit')
+  submit.removeAttr("disabled");
+  submit.addClass("dirty");
+
+  // once a form is started, stop following the presenter
+  activityIncomplete = true;
+}
+
+function showFormAnswers(form) {
+  // If we have any correct options, find the parent element, then tag all descendants as incorrect
+  $('.slide.form\\='+form+' label.correct').parents('.form.element').find('label.response,option').addClass('incorrect');
+  // Then remove the double tag from the correct answers.
+  $('.slide.form\\='+form+' label.correct').removeClass('incorrect');
+  // finally, style the slide so we can see the effects
+  $('.slide.form\\='+form).addClass('answerkey')
+}
+
+function renderFormWatcher(element) {
+  var form = element.attr('title');
+  var action = $('.content form#'+form).attr('action');
+
+  element.empty();
+  element.attr('action', action); // yes, we're putting an action on a div. Sue me.
+  $('.content form#'+form+' div.form.element').each(function() {
+    $(this).clone().appendTo(element);
+  });
+
+  renderForm(element);
+  // short pause to let the form be rebuilt. Prevents screen flashing.
+  setTimeout(function() { element.show(); }, 100);
+  return setInterval(function() { renderForm(element); }, 3000);
+}
+
+function renderForm(form) {
+  if(typeof(form) == 'string') {
+    form = $('form#'+form);
+  }
+  var action = form.attr("action");
+  $.getJSON(action, function( data ) {
+    //console.log(data);
+    form.children('.element').each(function(index, element) {
+      var key = $(element).attr('data-name');
+
+      // add a counter label if we haven't already
+      if( $(element).next('.count').length === 0 ) {
+        $(element).after($('<h1>').addClass('count'));
+      }
+
+      $(element).find('ul > li > *').each(function() {
+        $(this).parent().parent().before(this);
+      });
+      $(element).children('ul').each(function() {
+        $(this).remove();
+      });
+
+      // replace all input widgets with divs for the bar chart
+      $(element).children(':input').each(function(index, input) {
+        switch( $(input).attr('type') ) {
+          case 'text':
+          case 'button':
+          case 'submit':
+          case 'textarea':
+            // we don't render these
+            $(input).parent().remove();
+            break;
+
+          case 'radio':
+          case 'checkbox':
+            // Just render these directly and migrate the label to inside the span
+            var label   = $(input).next('label');
+            var text    = label.text();
+            var classes = $(input).attr('class');
+
+            if(text.match(/^-+$/)) {
+              $(input).remove();
+            } else {
+              var resultDiv = $('<div>')
+                .addClass('item')
+                .attr('data-value', $(input).attr('value'))
+                .append($('<span>').addClass('answer').text(text))
+                .append($('<div>').addClass('bar'));
+
+              if (classes) {
+                resultDiv.addClass(classes);
+              }
+              $(input).replaceWith(resultDiv);
+            }
+            label.remove();
+            break;
+
+          default:
+            // select doesn't have a type attribute... yay html
+            // poke inside to get options, then render each as a span and replace the select
+            var parent = $(input).parent();
+
+            $(input).children('option').each(function(index, option) {
+              var text    = $(option).text();
+              var classes = $(option).attr('class');
+
+              if(! text.match(/^-+$/)) {
+                var resultDiv = $('<div>')
+                  .addClass('item')
+                  .attr('data-value', $(option).val())
+                  .append($('<span>').addClass('answer').text(text))
+                  .append($('<div>').addClass('bar'));
+                if (classes) {
+                  resultDiv.addClass(classes);
+                }
+                parent.append(resultDiv);
+              }
+            });
+            $(input).remove();
+            break;
+        }
+      });
+
+      // only start counting and sizing bars if we actually have usable data
+      if(data) {
+        // number of unique responses
+        var total = 0;
+        // double loop so we can handle re-renderings of the form
+        $(element).find('.item').each(function(index, item) {
+          var name = $(item).attr('data-value');
+
+          if(key in data) {
+            var count = data[key]['responses'][name];
+
+            total = data[key]['count'];
+          }
+        });
+
+        // insert the total into the counter label
+        $(element).next('.count').each(function(index, icount) {
+          $(icount).text(total);
+        });
+
+        var oldTotal = $(element).attr('data-total');
+        $(element).find('.item').each(function() {
+          var name     = $(this).attr('data-value');
+          var oldCount = $(this).attr('data-count');
+
+          if(key in data) {
+            var count = data[key]['responses'][name] || 0;
+          }
+          else {
+            var count = 0;
+          }
+
+          if(count != oldCount || total != oldTotal) {
+            var percent = (total) ? ((count/total)*100) + '%' : '0%';
+
+            $(this).attr('data-count', count);
+            $(this).find('.bar').animate({width: percent});
+          }
+        });
+
+        // record the old total value so we only animate when it changes
+        $(element).attr('data-total', total);
+      }
+
+      $(element).addClass('rendered');
+    });
+
+  });
+}
+
+function connectControlChannel() {
+  if (interactive) {
+    protocol     = (location.protocol === 'https:') ? 'wss://' : 'ws://';
+    path         = (location.root + '/control').replace('//', '/').replace('/presenter','');;
+    ws           = new WebSocket(protocol + location.host + path);
+    ws.onopen    = function()  { connected();          };
+    ws.onclose   = function()  { disconnected();       }
+    ws.onmessage = function(m) { parseMessage(m.data); };
+  }
+}
+
+// This exists as an intermediary simply so the presenter view can override it
+function reconnectControlChannel() {
+  connectControlChannel();
+}
+
+function connected() {
+  console.log('Control socket opened');
+  $("#feedbackSidebar .interactive").removeClass("disabled");
+  $("img#disconnected").hide();
+
+  try {
+    // If we are a presenter, then remind the server who we are
+    register();
+  }
+  catch (e) {}
+}
+
+function disconnected() {
+  console.log('Control socket closed');
+  $("#feedbackSidebar .interactive").addClass("disabled");
+  $("img#disconnected").show();
+
+  setTimeout(function() { reconnectControlChannel() } , 5000);
+}
+
+function generateGuid() {
+  var result, i, j;
+  result = 'S';
+  for(j=0; j<32; j++) {
+    if( j == 8 || j == 12|| j == 16|| j == 20)
+      result = result + '-';
+    i = Math.floor(Math.random()*16).toString(16).toUpperCase();
+    result = result + i;
+  }
+  return result;
+}
+
+function parseMessage(data) {
+  var command = JSON.parse(data);
+
+  if ("id" in command) {
+    var guid = command['id'];
+    if (lastMessageGuid != guid) {
+      lastMessageGuid = guid;
+    }
+    else {
+      return;
+    }
+  }
+
+  try {
+    switch (command['message']) {
+      case 'current':
+        follow(command["current"], command["increment"]);
+        break;
+
+      case 'answerkey':
+        showFormAnswers(command["formID"]);
+        break;
+
+      case 'complete':
+        completeQuestion(command["questionID"]);
+        break;
+
+      case 'pace':
+        paceFeedback(command["pace"]);
+        break;
+
+      case 'question':
+        postQuestion(command["question"], command["questionID"]);
+        break;
+
+      case 'cancel':
+        removeQuestion(command["questionID"]);
+        break;
+
+      case 'activity':
+        updateActivityCompletion(command['count']);
+
+      case 'annotation':
+        invokeAnnotation(command["type"], command["x"], command["y"]);
+        break;
+
+      case 'annotationConfig':
+        setting = command['setting'];
+        value   = command['value'];
+
+        annotations[setting] = value;
+        break;
+
+    }
+  }
+  catch(e) {
+    console.log("Not a presenter! " + e);
+  }
+
+}
+
+function sendPace(pace) {
+  if (ws.readyState == WebSocket.OPEN) {
+    ws.send(JSON.stringify({ message: 'pace', pace: pace}));
+  }
+}
+
+function askQuestion(question) {
+  if (ws.readyState == WebSocket.OPEN) {
+    var questionID = generateGuid();
+    ws.send(JSON.stringify({ message: 'question', question: question, questionID: questionID}));
+    return questionID;
+  }
+}
+
+function cancelQuestion(questionID) {
+  if (ws.readyState == WebSocket.OPEN) {
+    ws.send(JSON.stringify({ message: 'cancel', questionID: questionID}));
+  }
+}
+
+function completeQuestion(questionID) {
+  var question = $("li#"+questionID)
+  if(question.length > 0) {
+    question.addClass('closed');
+    feedbackActivity();
+  }
+}
+
+function sendFeedback(rating, feedback) {
+  if (ws.readyState == WebSocket.OPEN) {
+    var slide  = $("#slideFilename").text();
+    ws.send(JSON.stringify({ message: 'feedback', rating: rating, feedback: feedback, slide: slide}));
+    $("input:radio[name=rating]:checked").attr('checked', false);
+  }
+}
+
+function sendAnnotation(type, x, y) {
+  if (ws.readyState == WebSocket.OPEN) {
+    ws.send(JSON.stringify({ message: 'annotation', type: type, x: x, y: y }));
+  }
+}
+
+function sendAnnotationConfig(setting, value) {
+  if (ws.readyState == WebSocket.OPEN) {
+    ws.send(JSON.stringify({ message: 'annotationConfig', setting: setting, value: value }));
+  }
+}
+
+function sendActivityStatus(status) {
+  if (ws.readyState == WebSocket.OPEN) {
+    ws.send(JSON.stringify({ message: 'activity', slide: slidenum, status: status }));
+  }
+}
+
+function invokeAnnotation(type, x, y) {
+  switch (type) {
+    case 'erase':
+      annotations.erase();
+      break;
+
+    case 'draw':
+      annotations.draw(x,y);
+      break;
+
+    case 'click':
+      annotations.click(x,y);
+      break;
+  }
+}
+
+function feedbackActivity() {
+  $('#hamburger').addClass('highlight');
+  setTimeout(function() { $("#hamburger").removeClass('highlight') }, 75);
+}
+
+function track(current) {
+  if (mode.track && ws.readyState == WebSocket.OPEN) {
+    var slideName = $("#slideFilename").text() || $("#slideFile").text(); // yey for consistency
+
+    if(current) {
+      ws.send(JSON.stringify({ message: 'track', slide: slideName}));
+    }
+    else {
+      var slideEndTime = new Date().getTime();
+      var elapsedTime  = slideEndTime - slideStartTime;
+
+      // reset the timer
+      slideStartTime = slideEndTime;
+
+      if (elapsedTime > 1000) {
+        elapsedTime /= 1000;
+        ws.send(JSON.stringify({ message: 'track', slide: slideName, time: elapsedTime}));
+      }
+    }
+  }
+}
+
+// Open a new tab with an online code editor, if so configured
+function editSlide() {
+  var slide = $("span#slideFilename").text().replace(/\/\d+$/, '');
+  var link  = editUrl + slide + ".md";
+  window.open(link);
+}
+
+function follow(slide, newIncrement, force) {
+  presenterSlideNum = slide;
+
+  if ((mode.follow && ! activityIncomplete) || force) {
+    var lastSlide = slidenum;
+    console.log("New slide: " + slide);
+    gotoSlide(slide);
+
+    if( ! $("body").hasClass("presenter") ) {
+      switch (slidenum - lastSlide) {
+        case -1:
+          fireEvent("showoff:prev");
+          break;
+
+        case 1:
+          fireEvent("showoff:next");
+          break;
+      }
+
+      // if the master says we're incrementing. Use a loop in case the viewer is out of sync
+      while(newIncrement > incrCurr) {
+        increment();
+      }
+
+    }
+  }
+
+  // show the sync button if we're not on the same slide as the presenter
+  checkSyncState();
+}
+
+function checkSyncState() {
+  if (presenterSlideNum != slidenum && presenterSlideNum != null) {
+    $("#synchronize").show();
+  }
+  else {
+    $("#synchronize").hide();
+  }
+}
+
+function synchronize() {
+  follow(presenterSlideNum, 0, true);
+}
+
+function getPosition() {
+  // get the current position from the server
+  ws.send(JSON.stringify({ message: 'position' }));
+}
+
+function fireEvent(ev) {
+  var event = jQuery.Event(ev);
+  $(currentSlide).find(".content").trigger(event);
+  if (event.isDefaultPrevented()) {
+    return;
+  }
+}
+
+function increment() {
+  showIncremental(incrCurr);
+
+  var incrEvent = jQuery.Event("showoff:incr");
+  incrEvent.slidenum = slidenum;
+  incrEvent.incr = incrCurr;
+  $(currentSlide).find(".content").trigger(incrEvent);
+
+  incrCurr++;
+}
+
+function prevStep(updatepv)
+{
+  $(currentSlide).find('video').each(function() {
+    console.log('Pausing videos on ' + currentSlide.attr('id'))
+    $(this).get(0).pause();
+  });
+
+  fireEvent("showoff:prev");
+  track();
+  slidenum--;
+  return showSlide(true, updatepv); // We show the slide fully loaded
+}
+
+function nextStep(updatepv)
+{
+  $(currentSlide).find('video').each(function() {
+    console.log('Pausing videos on ' + currentSlide.attr('id'))
+    $(this).get(0).pause();
+  });
+
+  fireEvent("showoff:next");
+  track();
+
+  if (incrCurr >= incrSteps) {
+    slidenum++;
+    return showSlide(false, updatepv);
+  } else {
+    increment();
+  }
+}
+
+function prevSec(updatepv)
+{
+  $(currentSlide).find('video').each(function() {
+    console.log('Pausing videos on ' + currentSlide.attr('id'))
+    $(this).get(0).pause();
+  });
+
+  var curSec = currentSlide.attr('data-section');
+  var prevSec = $('li:has(a.navSection:contains('+curSec+'))')
+        .prev('li').find('ul li a:first').attr('rel');
+  gotoSlide(prevSec);
+  track();
+}
+
+function nextSec(updatepv)
+{
+  $(currentSlide).find('video').each(function() {
+    console.log('Pausing videos on ' + currentSlide.attr('id'))
+    $(this).get(0).pause();
+  });
+
+  var curSec = currentSlide.attr('data-section');
+  var nextSec = $('li:has(a.navSection:contains('+curSec+'))')
+        .next('li').find('ul li a:first').attr('rel');
+  gotoSlide(nextSec);
+  track();
+}
+
+// carrying on our grand tradition of overwriting functions of the same name with presenter.js
+function postSlide() {
+	if(currentSlide) {
+    var notes = getCurrentNotes();
+    // Replace notes with empty string if there are no notes
+    // Otherwise it fails silently and does not remove old notes
+    if (notes.length === 0) {
+      notes = "";
+    } else {
+      notes = notes.html();
+    }
+
+		$('#notes').html(notes);
+
+		// tell Showoff what slide we ended up on
+		track(true);
+	}
+}
+
+
+function doDebugStuff()
+{
+	if (debugMode) {
+	  $('#debugInfo').show();
+		$('#slideFilename').show();
+	} else {
+	  $('#debugInfo').hide();
+		$('#slideFilename').hide();
+	}
+}
+
+function blankScreen()
+{
+  try {
+    slaveWindow.blankScreen();
+  }
+  catch (e) {
+    if ($('#screenblanker').length) { // if #screenblanker exists
+        $('#screenblanker').slideUp('normal', function() {
+            $('#screenblanker').remove();
+        });
+    } else {
+        $('body').prepend('<div id="screenblanker"></div>');
+        $('#screenblanker').slideDown();
+    }
+  }
+}
+
+var notesMode = false
+function toggleNotes()
+{
+  notesMode = !notesMode
+	if (notesMode) {
+		$('#notesInfo').show()
+		debug('notes mode on')
+	} else {
+		$('#notesInfo').hide()
+	}
+}
+
+function toggleFollow()
+{
+  mode.follow = ! mode.follow;
+
+  if(mode.follow) {
+    $("#followMode").addClass('fa-check-circle');
+    $("#followMode").removeClass('fa-ban');
+    getPosition();
+  } else {
+    $("#followMode").addClass('fa-ban');
+    $("#followMode").removeClass('fa-check-circle');
+  }
+  showFooter();
+}
+
+function debug(data)
+{
+	$('#debugInfo').text(data)
+}
+
+function toggleKeybinding (setting) {
+  if (document.onkeydown === null || setting === 'on') {
+    if (typeof presenterKeyDown === 'function') {
+      document.onkeydown = presenterKeyDown;
+    } else {
+      document.onkeydown = keyDown;
+    }
+  } else {
+    document.onkeydown = null;
+  }
+}
+
+function keyDown(event){
+  var key = event.keyCode;
+
+  debug('keyDown: ' + key);
+  // avoid overriding browser commands
+  if (event.ctrlKey || event.altKey || event.metaKey) {
+    return true;
+  }
+
+  switch(getAction(event)) {
+    case 'DEBUG':     toggleDebug();      break;
+    case 'PREV':      prevStep();         break;
+    case 'PREVSEC':   prevSec();          break;
+    case 'NEXT':      nextStep();         break;
+    case 'NEXTSEC':   nextSec();          break;
+    case 'REFRESH':   reloadSlides();     break;
+    case 'RELOAD':    reloadSlides(true); break;
+    case 'CONTENTS':  toggleContents();   break;
+    case 'HELP':      toggleHelp();       break;
+    case 'BLANK':     blankScreen();      break;
+    case 'FOOTER':    toggleFooter();     break;
+    case 'FOLLOW':    toggleFollow();     break;
+    case 'NOTES':     toggleNotes();      break;
+    case 'CLEAR':     removeResults();    break;
+    case 'PAUSE':     togglePause();      break;
+    case 'PRESHOW':   togglePreShow();    break;
+    case 'EXECUTE':
+      debug('executeCode');
+      executeVisibleCodeBlock();
+      break;
+    default:
+      switch (key) {
+        case 48: // 0
+        case 49: // 1
+        case 50: // 2
+        case 51: // 3
+        case 52: // 4
+        case 53: // 5
+        case 54: // 6
+        case 55: // 7
+        case 56: // 8
+        case 57: // 9
+          // concatenate numbers from previous keypress events
+          gotoSlidenum = gotoSlidenum * 10 + (key - 48);
+          break;
+        case 13: // enter/return
+          // check for a combination of numbers from previous keypress events
+          if (gotoSlidenum > 0) {
+            debug('go to ' + gotoSlidenum);
+            slidenum = gotoSlidenum - 1;
+            showSlide(true);
+            gotoSlidenum = 0;
+          }
+          break;
+        default:
+          break;
+      }
+      break;
+    }
+  return true;
+}
+
+function getAction (event) {
+  return keymap[getKeyName(event)];
+}
+
+function getKeyName (event) {
+  var keyName = keycode_dictionary[event.keyCode];
+  if (event.shiftKey && keyName !== undefined) {
+    // Check for non-alpha characters first, because no idea what toUpperCase will do to those
+    if (keycode_shifted_keys[keyName] !== undefined) {
+      keyName = keycode_shifted_keys[keyName];
+    } else {
+      keyName = keyName.toUpperCase();
+    }
+  }
+  return keyName;
+}
+
+function toggleComplete() {
+  if($(this).is(':checked')) {
+    activityIncomplete = false;
+    sendActivityStatus(true);
+    if(mode.follow) {
+      getPosition();
+    }
+  }
+  else {
+    activityIncomplete = true;
+    sendActivityStatus(false);
+  }
+}
+
+function toggleDebug () {
+  debugMode = !debugMode;
+  doDebugStuff();
+}
+
+function reloadSlides (hard) {
+  if(hard) {
+    var message = I18n.t('reload');
+  }
+  else {
+    var message = I18n.t('refresh');
+  }
+
+  if (confirm(message)) {
+    loadSlides(loadSlidesBool, true, hard);
+  }
+}
+
+function toggleFooter() {
+	$('#footer').toggle()
+}
+
+function showFooter(timeout) {
+  timeout = (typeof timeout !== 'undefined') ?  timeout : 5000;
+
+  if($('#footer').is(':hidden')) {
+    $('#footer').show(200);
+
+    window.setTimeout(function() {
+      $('#footer').hide(200);
+    }, timeout);
+  }
+
+}
+
+function toggleHelp () {
+  var help = $("#help-modal");
+  help.dialog("isOpen") ? help.dialog("close") : help.dialog("open");
+}
+
+function toggleContents () {
+  $('#feedbackSidebar, #sidebarExit').toggle();
+  $("#navigation").toggle();
+  updateMenuChevrons();
+}
+
+function swipeLeft() {
+  nextStep();
+}
+
+function swipeRight() {
+  prevStep();
+}
+
+var removeResults = function() {
+	$('.results').remove();
+
+	// if we're a presenter, mirror this on the display window
+  try { slaveWindow.removeResults() } catch (e) {};
+};
+
+var displayHUD = function(text) {
+	removeResults();
+	var _results = $('<div>').addClass('results').html('<pre>' + String(text).substring(0, 1500) + '</pre>');
+	$('body').append(_results);
+	_results.click(removeResults);
+
+	// if we're a presenter, mirror this on the display window
+  try { slaveWindow.displayHUD(text) } catch (e) {};
+};
+
+// Execute the first visible executable code block
+function executeVisibleCodeBlock()
+{
+  var code = $('code.execute:visible')
+  if (code.length > 0) {
+    // make the code block available as $(this) object
+    executeCode.call(code[0]);
+  }
+}
+
+// determine which code handler to call and execute code sample
+function executeCode() {
+  var codeDiv = $(this);
+
+  try {
+    var lang = codeDiv.attr("class").match(/\blanguage-(\w+)/)[1];
+    switch(lang) {
+      case 'javascript':
+      case 'coffeescript':
+        executeLocalCode(lang, codeDiv);
+        break;
+      default:
+        executeRemoteCode(lang, codeDiv)
+        break;
+    }
+  }
+  catch(e) {
+    debug('No code block to execute: ' + codeDiv.attr('class'));
+  };
+}
+
+// any code that can be run directly in the browser
+function executeLocalCode(lang, codeDiv) {
+  var result = null;
 
   setExecutionSignal(true, codeDiv);
   setTimeout(function() { setExecutionSignal(false, codeDiv);}, 1000 );
@@ -666,13 +1938,7 @@ function runCode(lang, codeDiv) {
         result = eval(codeDiv.text());
         break;
       case 'coffeescript':
-        // Use CoffeeScript 2.7.0 if available, fall back to 1.1.3 if not
-        if (typeof CoffeeScript !== 'undefined') {
-          result = eval(CoffeeScript.compile(codeDiv.text(), {bare: true}));
-        } else {
-          console.error("CoffeeScript compiler not available");
-          result = "CoffeeScript compiler not available";
-        }
+        result = eval(CoffeeScript.compile(codeDiv.text(), {bare: true}));
         break;
       default:
         result = 'No local exec handler for ' + lang;
@@ -692,11 +1958,12 @@ function executeRemoteCode(lang, codeDiv) {
 
   setExecutionSignal(true, codeDiv);
   $.get('execute/'+lang, {path: path, index: index}, function(result) {
-    displayHUD(result);
+    if (result != null) displayHUD(result);
     setExecutionSignal(false, codeDiv);
   });
 }
 
+// Provide visual indication that a block of code is running
 function setExecutionSignal(status, codeDiv) {
   if (status === true) {
     codeDiv.addClass("executing");
@@ -704,730 +1971,229 @@ function setExecutionSignal(status, codeDiv) {
   else {
     codeDiv.removeClass("executing");
   }
-}
 
-function displayHUD(text) {
-  $('#HUD').html(text);
-  $('#HUD').show();
-  setTimeout(function() { $('#HUD').hide(); }, 5000);
-}
+  // if we're a presenter, mirror this on the display window
+  try {
+    var id    = codeDiv.closest('div.slide').attr('id');
+    var index = $('div.slide#'+id+' code.execute').index(codeDiv);
+    var code  = slaveWindow.$('div.slide#'+id+' code.execute').eq(index)
 
-function prevStep(updatepv)
-{
-  var curr = currentSlideFromParams();
-  var currentIncr = 0;
-
-  if(curr) {
-    var s = $("#preso .slide:eq("+(curr-1)+")");
-    if(s.hasClass('incremental')) {
-      var vis = s.find('.incremental:visible');
-      var visslide = s.find('.incremental.slide:visible');
-      if(visslide.length > 0) {
-        currentIncr = visslide.attr('value');
-      }
-      else if(vis.length > 0) {
-        currentIncr = vis.last().attr('value');
-      }
-    }
-  }
-
-  var preso = $("#preso");
-  preso.off("slide-before");
-
-  var currentSlide = $('.slide.slide-active');
-  var increment = currentSlide.find('.incremental');
-
-  var incrs = increment.filter(function() {
-    return $(this).attr('value') == currentIncr;
-  });
-
-  // when displaying with 'fade' transition, we need to actually go to the slide
-  // and hide the increments, rather than cycling which just shows/hides the slide
-  if(currentIncr > 0) {
-    // remove the class from all incrementals that have it
-    incrs.removeClass('to-show');
-    incrs.removeClass('to-hide');
-    incrs.addClass('hidden');
-
-    // now find incrementals with lower value
-    var prevIncrs = increment.filter(function() {
-      return $(this).attr('value') < currentIncr;
-    });
-    prevIncrs.removeClass('hidden');
-    prevIncrs.addClass('to-hide');
-
-    var prevIncr = currentIncr - 1;
-    var newIncrs = increment.filter(function() {
-      return $(this).attr('value') == prevIncr;
-    });
-    if(newIncrs.length > 0) {
-      newIncrs.removeClass('hidden');
-      newIncrs.addClass('to-show');
+    if (status === true) {
+      code.addClass("executing");
     }
     else {
-      // no previous increments, go to previous slide
-      SlideSystem.prev();
+      code.removeClass("executing");
     }
-  }
-  else {
-    SlideSystem.prev();
-  }
-
-  if (typeof(updatepv) == 'undefined') {
-    updatepv = true;
-  }
-
-  if (updatepv) {
-    var postSlideContent = postSlide;
-    // transition to the previous slide
-    postSlide = function() {
-      $("#preso").off('slide-update-view', postSlide);
-      postSlide = postSlideContent;
-      postSlideContent();
-    };
-    $("#preso").on('slide-update-view', postSlide);
-  }
+  } catch (e) {};
 }
 
-function nextStep(updatepv)
-{
-  var curr = currentSlideFromParams();
-  var currentIncr = 0;
+/********************
+ PreShow Code
+ ********************/
 
-  if(curr) {
-    var s = $("#preso .slide:eq("+(curr-1)+")");
-    if(s.hasClass('incremental')) {
-      var vis = s.find('.incremental:visible');
-      var visslide = s.find('.incremental.slide:visible');
-      if(visslide.length > 0) {
-        currentIncr = visslide.attr('value');
-      }
-      else if(vis.length > 0) {
-        currentIncr = vis.last().attr('value');
-      }
+
+var preshow_stop         = null;
+var preshow_secondsPer   = 8;
+
+var preshow_current      = 0;
+var preshow_images       = null;
+var preshow_imagesTotal  = 0;
+var preshow_des          = null;
+
+function togglePreShow() {
+  // The slave window updates this flag, which seems backwards except that the
+  // slave determines when to finish preshow.
+  if(preshow_stop) {
+    try {
+      slaveWindow.stopPreShow();
     }
-  }
-
-  var currentSlide = $('.slide.slide-active');
-  var increment = currentSlide.find('.incremental');
-
-  var currentVisible = increment.filter(function() {
-    return $(this).hasClass('to-show') || $(this).hasClass('to-hide');
-  });
-  if(currentVisible.length == 0) {
-    // nothing shown yet, so show first set
-    var firstIncrs = increment.filter(function() {
-      return $(this).attr('value') == 0;
-    });
-    if(firstIncrs.length > 0) {
-      increment.filter(function() {
-        return $(this).attr('value') == 0;
-      }).removeClass('hidden').addClass('to-show');
+    catch (e) {
+      stopPreShow();
     }
-    else {
-      var preso = $("#preso");
-      preso.off("slide-before");
-      SlideSystem.next();
-    }
-  }
-  else {
-    // show the next set
-    var nextIncr = currentIncr + 1;
-    var newIncrs = increment.filter(function() {
-      return $(this).attr('value') == nextIncr;
-    });
-    if(newIncrs.length > 0) {
-      newIncrs.removeClass('hidden').addClass('to-show');
-      currentVisible.removeClass('to-show').addClass('to-hide');
-    }
-    else {
-      var preso = $("#preso");
-      preso.off("slide-before");
-      SlideSystem.next();
-    }
-  }
 
-  if (typeof(updatepv) == 'undefined') {
-    updatepv = true;
-  }
-
-  if (updatepv) {
-    var postSlideContent = postSlide;
-    // transition to the next slide
-    postSlide = function() {
-      $("#preso").off('slide-update-view', postSlide);
-      postSlide = postSlideContent;
-      postSlideContent();
-    };
-    $("#preso").on('slide-update-view', postSlide);
-  }
-}
-
-function doDebugStuff()
-{
-  if (debugMode) {
-    $('#debugInfo').show();
-    debug('debug mode on');
   } else {
-    $('#debugInfo').hide();
+    var seconds = parseFloat(prompt(I18n.t('preshow.prompt')) * 60);
+
+    try {
+      slaveWindow.setupPreShow(seconds);
+    }
+    catch (e) {
+      setupPreShow(seconds);
+    }
   }
 }
 
-function debug(data)
-{
-  $('#debugInfo').text(data);
-  console.log(data);
+function setupPreShow(seconds) {
+  preshow_stop = secondsFromNow(seconds);
+  try { presenterView.preshow_stop = preshow_stop } catch (e) {}
+
+  // footer styling looks icky. Hide it for now.
+  $('#footer').hide();
+
+  $.getJSON("preshow_files", false, function(data) {
+    $('#preso').after("<div id='preshow'></div><div id='tips'></div><div id='preshow_timer'></div>");
+    $.each(data, function(i, n) {
+      if(n == "preshow.json") {
+        // has a descriptions file
+        $.getJSON("file/_preshow/preshow.json", false, function(data) {
+          preshow_des = data;
+        })
+      } else {
+        $('#preshow').append('<img ref="' + n + '" src="file/_preshow/' + n + '" class="preshow" />');
+      }
+    })
+    preshow_images      = $('#preshow > img');
+    preshow_imagesTotal = preshow_images.length;
+
+    startPreShow();
+  });
 }
 
-function toggleDebug()
-{
-  debugMode = !debugMode;
-  doDebugStuff();
-}
+function startPreShow() {
+  nextPreShowImage();
 
-function showNext() {
-  nextStep();
-}
+  var nextImage = secondsFromNow(preshow_secondsPer);
+  var interval  = setInterval(function() {
+    var now = new Date();
 
-function showPrev() {
-  prevStep();
-}
-
-function doSlide(slideNum) {
-  gotoSlide(parseInt(slideNum));
-}
-
-function gotoSlide(slideNum, updatepv) {
-  var preso = $("#preso");
-  preso.off("slide-before");
-  SlideSystem.goTo(slideNum);
-
-  if (typeof(updatepv) == 'undefined') {
-    updatepv = true;
-  }
-
-  if (updatepv) {
-    var postSlideContent = postSlide;
-    // transition to the next slide
-    postSlide = function() {
-      $("#preso").off('slide-update-view', postSlide);
-      postSlide = postSlideContent;
-      postSlideContent();
-    };
-    $("#preso").on('slide-update-view', postSlide);
-  }
-}
-
-function showFirstSlide() {
-  gotoSlide(0);
-  showSlide();
-}
-
-function showSlideById(id) {
-  gotoSlide(parseInt(slides.index($('#'+id))));
-  showSlide();
-}
-
-function postSlide() {
-  if(currentSlideFromParams() == null) {
-    var slide = slides.eq(slidenum);
-    var id = slide.attr('id');
-    if (typeof(id) != 'undefined') {
-      window.location.hash = '#' + id;
+    if (now > preshow_stop) {
+      clearInterval(interval);
+      stopPreShow();
     } else {
-      window.location.hash = '#' + (slidenum+1);
+      if (now > nextImage) {
+        nextImage = secondsFromNow(preshow_secondsPer);
+        nextPreShowImage();
+      }
+      var secondsLeft = Math.floor((preshow_stop.getTime() - now.getTime()) / 1000);
+      addPreShowTips(secondsLeft);
     }
-  }
-  SlideSystem.resume();
+  }, 1000)
 }
 
-function expandSlide() {
-  $("#preso").height("100%");
-  $("#preso").width("100%");
+function addPreShowTips(secondsLeft) {
+	$('#preshow_timer').text(I18n.t('preshow.resume') + ' ' + secondsToTime(secondsLeft));
+	var des = preshow_des && preshow_des[tmpImg.attr("ref")];
+	if(des) {
+		$('#tips').show();
+		$('#tips').text(des);
+	} else {
+		$('#tips').hide();
+	}
 }
 
-function unexpandSlide() {
-  $("#preso").height("620px");
-  $("#preso").width("800px");
+function secondsFromNow(seconds) {
+  var now = new Date();
+  now.setTime(now.getTime() + seconds * 1000);
+  return now;
 }
 
-function toggleSlide() {
-  if ($("#preso").height() == "620px") {
-    expandSlide();
-  }
-  else {
-    unexpandSlide();
-  }
+function secondsToTime(sec) {
+	var min = Math.floor(sec / 60);
+	sec = sec - (min * 60);
+	if(sec < 10) {
+		sec = "0" + sec;
+	}
+	return min + ":" + sec;
 }
 
-function notesWindow() {
+function stopPreShow() {
+  try { presenterView.preshow_stop = null } catch (e) {}
+	preshow_stop = null;
+
+	$('#preshow').remove();
+	$('#tips').remove();
+	$('#preshow_timer').remove();
+
+	loadSlides(loadSlidesBool);
+}
+
+function nextPreShowImage() {
+	preshow_current += 1;
+	if((preshow_current + 1) > preshow_imagesTotal) {
+		preshow_current = 0;
+	}
+
+	$("#preso").empty();
+	tmpImg = preshow_images.eq(preshow_current).clone();
+	$(tmpImg).attr('width', '1020');
+	$("#preso").html(tmpImg);
+}
+
+/********************
+ End PreShow Code
+ ********************/
+
+function togglePause() {
   try {
-    var opts = {
-      toolbar: false,
-      resizable: false,
-      scrollbars: true,
-      height: 640,
-      width: 800
-    };
-
-    var url = 'notes';
-    slaveWindow = window.open(url, 'showoff_notes', opts);
-    slaveWindow.focus();
-  }
-  catch(e) {
-    console.log('Failed to open notes window. ' + e.message);
-  }
-}
-
-function printWindow() {
-  try {
-    var opts = {
-      toolbar: false,
-      resizable: false,
-      scrollbars: true,
-      height: 640,
-      width: 800
-    };
-
-    var url = 'print';
-    slaveWindow = window.open(url, 'showoff_print', opts);
-    slaveWindow.focus();
-  }
-  catch(e) {
-    console.log('Failed to open print window. ' + e.message);
-  }
-}
-
-function downloadWindow() {
-  try {
-    var opts = {
-      toolbar: false,
-      resizable: false,
-      scrollbars: true,
-      height: 640,
-      width: 800
-    };
-
-    var url = 'download';
-    slaveWindow = window.open(url, 'showoff_download', opts);
-    slaveWindow.focus();
-  }
-  catch(e) {
-    console.log('Failed to open download window. ' + e.message);
-  }
-}
-
-function onPopState(event) {
-  if (event.state && event.state.slide) {
-    gotoSlide(event.state.slide-1);
-  }
-}
-
-function keyDown(event){
-  var key = event.keyCode;
-
-  if (event.ctrlKey || event.metaKey) {
-    // Don't interfere with browser shortcuts
-    return;
-  }
-
-  debug('keyDown: ' + key);
-  // avoid overriding browser commands
-  if ($.inArray(key, [
-      74,  // j
-      75,  // k
-      85,  // u
-      78,  // n
-      80  // p
-      ]) != -1) {
-    event.preventDefault();
-  }
-}
-
-function keyUp(event) {
-  var key = event.keyCode;
-
-  if (event.ctrlKey || event.metaKey) {
-    // Don't interfere with browser shortcuts
-    return;
-  }
-
-  debug('keyUp: ' + key);
-  // avoid overriding browser commands
-  if ($.inArray(key, [
-      74,  // j
-      75,  // k
-      85,  // u
-      78,  // n
-      80  // p
-      ]) != -1) {
-    event.preventDefault();
-  }
-
-  if(typeof(keymap) != 'undefined') {
-    var mapping = keymap[key];
-    if(mapping) {
-      mapping();
-    }
-  }
-}
-
-function followAnchor() {
-  gotoSlide(slidenum);
-  debug('followAnchor: ' + slidenum);
-}
-
-function getUrlParameter(name) {
-  name = name.replace(/[\[]/, '\\[').replace(/[\]]/, '\\]');
-  var regex = new RegExp('[\\?&]' + name + '=([^&#]*)');
-  var results = regex.exec(location.search);
-  return results === null ? '' : decodeURIComponent(results[1].replace(/\+/g, ' '));
-};
-
-function connectControlChannel(url) {
-  ws = new WebSocket(url);
-  ws.onopen    = function()  { connected();          };
-  ws.onclose   = function()  { disconnected();       }
-  ws.onmessage = function(m) { parseMessage(m.data); };
-}
-
-function connected() {
-  console.log('Control connection opened');
-  $("#feedbackSidebar").removeClass('error');
-  $("#feedbackSidebar").addClass('success');
-  $("img#disconnected").hide();
-  $("img#connected").show();
-
-  try {
-    // If we are a presenter, then remind the server who we are
-    register();
+    slaveWindow.togglePause();
   }
   catch (e) {
-    console.log("Showoff.js was not loaded as a presenter");
+    $("#pauseScreen").toggle();
   }
-
-  sendConfig();
 }
 
-function disconnected() {
-  console.log('Control connection closed');
-  $("#feedbackSidebar").removeClass('success');
-  $("#feedbackSidebar").addClass('error');
-  $("img#connected").hide();
-  $("img#disconnected").show();
+/********************
+ Stats page
+ ********************/
 
-  setTimeout(function() { connectControlChannel(socketUrl) } , 5000);
-}
+function setupStats(data)
+{
+  $("#stats div#all div.detail").hide();
+  $("#stats div#all div.row").click(function() {
+      $(this).toggleClass('active');
+      $(this).find("div.detail").slideToggle("fast");
+  });
 
-function parseMessage(data) {
-  var command = JSON.parse(data);
+  ['stray', 'idle'].forEach(function(stat){
+    var percent = data[stat+'_p'];
+    var selector = '#'+stat;
 
-  if ("id" in command) {
-    var guid = command['id'];
-    if (guid in ShowoffTracker) {
-      var timer = ShowoffTracker[guid];
-      clearTimeout(timer);
-      delete ShowoffTracker[guid];
+    if(percent > 25) {
+      $(selector).show();
+      $(selector+' .label').text(percent+'%');
     }
-  }
-
-  if ("message" in command) {
-    // broadcast message that was received
-    try {
-      var type = command['type'];
-      var content = command['message'];
-
-      switch(type) {
-        case 'pace':
-          paceMarker.fadeIn();
-          break;
-
-        case 'autopace':
-          paceMarker.fadeIn();
-          setTimeout(function() { paceMarker.fadeOut() }, 1000);
-          break;
-
-        case 'follow':
-          $("#feedbackSidebar").addClass('success');
-          break;
-
-        case 'update':
-          break;
-
-        case 'navigation':
-          gotoSlide(content);
-          break;
-
-        case 'position':
-          var coords = content.split(',');
-          $(".zoomline").zoomline('setPosition', coords[0], coords[1]);
-          break;
-
-        case 'annotations':
-          break;
-
-        case 'form':
-          console.log("Received form update: " + content);
-          updateForm(content);
-          break;
-
-        case 'feedback':
-          console.log("Received feedback update: " + content);
-          updateFeedback(content);
-          break;
-
-        case 'notes':
-          var notes = content.split(/:/).pop();
-          break;
-
-        case 'chat':
-          break;
-
-        case 'poll':
-          handlePollMessage(content);
-          break;
-
-        case 'activity':
-          break;
-
-        case 'response':
-          break;
-
-        default:
-          console.log("Unknown message type: " + type);
-      }
-    }
-    catch(e) {
-      console.log("Unhandled error: " + e);
-    }
-  }
-
-}
-
-function sendConfig() {
-  // Send information about this presentation to the server
-  ws.send(JSON.stringify({
-    message: 'register',
-    type: 'configure',
-    id: "1234",
-    room: typeof(room) === "undefined" ? 'default' : room
-  }));
-}
-
-function sendPing(guid) {
-  // Send a ping
-  ws.send(JSON.stringify({
-    message: 'ping',
-    type: 'ping',
-    id: guid
-  }));
-}
-
-function sendPong(guid) {
-  // Send a pong
-  ws.send(JSON.stringify({
-    message: 'pong',
-    type: 'pong',
-    id: guid
-  }));
-}
-
-function handlePollMessage(message) {
-  var poll = null;
-  try {
-    poll = JSON.parse(message);
-  }
-  catch(e) {
-    console.log("Invalid poll message: " + message);
-    return;
-  }
-
-  if (poll.state === 'closed') {
-    $(".poll[data-id=" + poll.id + "]").hide();
-  }
-  else {
-    $(".poll[data-id=" + poll.id + "]").show();
-  }
-}
-
-function updateForm(message) {
-  var form = null;
-  try {
-    form = JSON.parse(message);
-  }
-  catch(e) {
-    console.log("Invalid form message: " + message);
-    return;
-  }
-
-  if (form.type === 'closed') {
-    $(".form[data-id=" + form.id + "]").hide();
-  }
-  else {
-    $(".form[data-id=" + form.id + "]").show();
-  }
-}
-
-function updateFeedback(message) {
-  var feedback = null;
-  try {
-    feedback = JSON.parse(message);
-  }
-  catch(e) {
-    console.log("Invalid feedback message: " + message);
-    return;
-  }
-
-  if (feedback.type === 'activity') {
-    var clean = feedback.id.replace(/[^a-zA-Z0-9]/g, '');
-    var element = $("#activity-" + clean);
-    if (element.length > 0) {
-      element.text(feedback.count);
-    }
-  }
-}
-
-function track(guid) {
-  ShowoffTracker[guid] = setTimeout(function() { tick(guid) }, 1000);
-}
-
-function tick(guid) {
-  ws.send(JSON.stringify({
-    message: 'ping',
-    type: 'ping',
-    id: guid
-  }));
-}
-
-function submitForm(form) {
-  var elements = form.elements;
-  var formData = {};
-
-  // Process all submittable elements
-  for (var i = 0; i < elements.length; i++) {
-    var element = elements[i];
-    if (element.hasAttribute('name')) {
-      formData[element.name] = element.value;
-    }
-  }
-
-  // Add the ID
-  formData['id'] = form.dataset.id;
-
-  // Send the data to the server
-  ws.send(JSON.stringify({
-    message: JSON.stringify(formData),
-    type: 'form',
-    id: "1234"
-  }));
-
-  return false;
-}
-
-function submitFeedback(id) {
-  // Send the data to the server
-  ws.send(JSON.stringify({
-    message: JSON.stringify({
-      id: id,
-      timestamp: Date.now()
-    }),
-    type: 'feedback',
-    id: "1234"
-  }));
-
-  return false;
-}
-
-function submitPoll(form) {
-  var elements = form.elements;
-  var formData = {};
-
-  // Process all submittable elements
-  for (var i = 0; i < elements.length; i++) {
-    var element = elements[i];
-    if (element.name === 'choice' && element.checked) {
-      formData[element.name] = element.value;
-    }
-  }
-
-  // Add the ID
-  formData['id'] = form.dataset.id;
-
-  // Send the data to the server
-  ws.send(JSON.stringify({
-    message: JSON.stringify(formData),
-    type: 'poll',
-    id: "1234"
-  }));
-
-  return false;
-}
-
-function expandContent() {
-  $('#slides .slide .content').addClass('expanded');
-}
-
-function unexpandContent() {
-  $('#slides .slide .content').removeClass('expanded');
-}
-
-function toggleContent() {
-  $('#slides .slide .content').toggleClass('expanded');
-}
-
-function toggleHelp() {
-  $('#help').toggle();
-}
-
-function toggleFooter() {
-  $('#footer').toggle();
-}
-
-function toggleSlideNotes() {
-  $('#notes').toggle();
-}
-
-function togglePresenterView() {
-  $('#presenter-view').toggle();
-}
-
-function togglePrivateNotes() {
-  $('#private-notes').toggle();
-}
-
-function toggleStyle() {
-  $('link[rel="stylesheet"]').map(function() {
-    var href = $(this).attr('href');
-    var re = new RegExp("styles/([^\/]+)\.css");
-    var arr = re.exec(href);
-    if(arr && arr.length > 1) {
-      var style = arr[1];
-      var newStyle;
-      if(style == 'primary') {
-        newStyle = 'secondary';
-      }
-      else {
-        newStyle = 'primary';
-      }
-      $(this).attr('href', 'styles/'+newStyle+'.css');
+    else {
+      $(selector).hide();
     }
   });
+
+  var location = window.location.pathname == 'presenter' ? '#' : '/#';
+  var viewers  = data['viewers'];
+  if (viewers) {
+    if (viewers.length == 1 && viewers[0][3] == 'current') {
+      $("#viewers").removeClass('zoomline');
+      $("#viewers").text(I18n.t('stats.allcurrent'));
+    }
+    else {
+      $("#viewers").zoomline({
+        max: data['viewmax'],
+        data: viewers,
+        click: function(element) { window.location = (location + element.attr("data-left")); }
+      });
+    }
+  }
+
+  if (data['elapsed']) {
+    $("#elapsed").zoomline({
+      max: data['maxtime'],
+      data: data['elapsed'],
+      click: function(element) { window.location = (location + element.attr("data-left")); }
+    });
+  }
 }
 
-function translation(lang) {
-  this.language = lang;
-  this.t = function(key) {
-    var keys = key.split('.');
-    var obj = user_translations[this.language];
-    if(obj) {
-      for(var i=0; i < keys.length; i++) {
-        obj = obj[keys[i]];
-        if(!obj) {
-          return key;
-        }
-      }
-      return obj;
-    }
-    return key;
-  };
+/* Is this a mobile device? */
+function mobile() {
+  return ( $(window).width() <= 640 )
+}
+
+/* check browser support for one or more css properties */
+function cssPropertySupported(properties) {
+  properties = typeof(properties) == 'string' ? Array(properties) : properties
+
+  var supported = properties.filter(function(property){
+    return property in document.body.style;
+  });
+
+  return properties.length == supported.length;
 }

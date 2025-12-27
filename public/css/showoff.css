@@ -1500,21 +1500,19 @@ h1.section_title {
 
 /* end animations */
 
-/* Custom slide navigation (replaces jQuery Cycle) */
-#preso .slide {
-  display: none;
+/* Swiper slide navigation */
+#preso.swiper {
+  /* Keep existing 1024x768 dimensions from .slide rule above */
+  overflow: hidden;
 }
-#preso .slide.slide-active {
-  display: block;
+#preso .swiper-wrapper {
+  height: 100%;
 }
-
-/* Transition effects */
-#preso.transition-fade .slide {
-  opacity: 0;
-  transition: opacity 0.5s ease;
-}
-#preso.transition-fade .slide.slide-active {
-  opacity: 1;
+#preso .swiper-slide.slide {
+  /* Override Swiper's default 100% width with the fixed slide dimensions */
+  width: 1024px;
+  height: 768px;
+  flex-shrink: 0;
 }
 
 /* Mermaid diagram constraints */

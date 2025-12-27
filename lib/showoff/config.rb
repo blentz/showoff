@@ -29,6 +29,11 @@ class Showoff::Config
     @@loaded
   end
 
+  # Return the full config hash
+  def self.config
+    @@config || {}
+  end
+
   # Absolute root of presentation
   def self.root
     @@root

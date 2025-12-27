@@ -79,8 +79,8 @@ begin
       ShowoffUtils.presentation_config_file = @options[:pres_file] if defined?(ShowoffUtils)
       if File.exist?(@options[:pres_file])
         # Parse and expand configuration
-        # Note: Config.load returns merged config from file + defaults
-        config = Showoff::Config.load(@options[:pres_file])
+        Showoff::Config.load(@options[:pres_file])
+        config = Showoff::Config.config
       else
         # Minimal defaults to allow routes to render in tests without a full config
         config = {}
@@ -272,6 +272,7 @@ end
       @keymap = @presentation.keymap
       @keycode_dictionary = @presentation.keycode_dictionary
       @keycode_shifted_keys = @presentation.keycode_shifted_keys
+      @transition_effect = settings.showoff_config['transition'] || 'fade'
 
       content_type 'text/html'
       erb :index
@@ -323,6 +324,7 @@ end
       @keymap = @presentation.keymap
       @keycode_dictionary = @presentation.keycode_dictionary
       @keycode_shifted_keys = @presentation.keycode_shifted_keys
+      @transition_effect = settings.showoff_config['transition'] || 'fade'
 
       # Variables needed by presenter.erb
       @slides = nil  # Slides loaded via JavaScript in presenter mode

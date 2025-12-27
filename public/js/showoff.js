@@ -231,22 +231,47 @@ function initializePresentation() {
 	slides = $('#preso .swiper-slide')
 	slideTotal = slides.length
 
-	// Initialize Swiper
-	swiper = new Swiper('#preso', {
+	// Initialize Swiper with configured effect
+	// Valid effects: 'slide', 'fade', 'cube', 'coverflow', 'flip', 'cards', 'creative'
+	var effect = (typeof transitionEffect !== 'undefined') ? transitionEffect : 'fade';
+	var swiperConfig = {
 		speed: 300,
-		effect: 'fade',
-		fadeEffect: {
-			crossFade: true
-		},
-		allowTouchMove: false,  // disable swipe, use keyboard/buttons
+		effect: effect,
+		allowTouchMove: false,
 		simulateTouch: false,
 		on: {
 			slideChange: function() {
-				// Update slidenum when Swiper changes slides
 				slidenum = this.activeIndex;
 			}
 		}
-	});
+	};
+
+	// Add effect-specific options
+	switch(effect) {
+		case 'fade':
+			swiperConfig.fadeEffect = { crossFade: true };
+			break;
+		case 'cube':
+			swiperConfig.cubeEffect = { slideShadows: false };
+			break;
+		case 'flip':
+			swiperConfig.flipEffect = { slideShadows: false };
+			break;
+		case 'coverflow':
+			swiperConfig.coverflowEffect = { rotate: 30, slideShadows: false };
+			break;
+		case 'cards':
+			swiperConfig.cardsEffect = { slideShadows: false };
+			break;
+		case 'creative':
+			swiperConfig.creativeEffect = {
+				prev: { translate: [0, 0, -400] },
+				next: { translate: ['100%', 0, 0] }
+			};
+			break;
+	}
+
+	swiper = new Swiper('#preso', swiperConfig);
 
 	setupMenu();
 

@@ -177,17 +177,35 @@ it extraordinarily easy to reorder the presentation.
 = Slide Transitions
 
 Slide transitions are powered by {Swiper.js}[https://swiperjs.com/] (version 11).
-Transitions can be supplied through the use of <tt>transition=tname</tt> on the
-<tt>!SLIDE</tt> definition:
 
-    !SLIDE transition=fade
+== Presentation-Level Transition
 
-Currently supported transitions:
+Set the default transition effect for your entire presentation in <tt>showoff.json</tt>:
 
-- fade (crossfade between slides)
-- none (instant transition, the default)
+    {
+      "name": "My Presentation",
+      "transition": "cube",
+      "sections": [ ... ]
+    }
 
-The fade transition provides a smooth crossfade effect between slides.
+Supported transition effects:
+
+- <b>slide</b> - horizontal slide (Swiper default)
+- <b>fade</b> - crossfade between slides (Showoff default)
+- <b>cube</b> - 3D cube rotation
+- <b>flip</b> - 3D card flip
+- <b>coverflow</b> - 3D coverflow effect
+- <b>cards</b> - stacked cards effect
+- <b>creative</b> - customizable 3D transforms
+
+== Per-Slide Instant Transition
+
+To disable the transition effect on a specific slide, use <tt>transition=none</tt>:
+
+    !SLIDE transition=none
+
+This forces an instant transition (speed=0) regardless of the presentation's
+configured effect. Useful for slides where animation would be distracting.
 
 See <tt>example/one/slidesA.md</tt> for examples of transition usage.
 

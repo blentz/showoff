@@ -56,6 +56,10 @@
     master      = <%= master_presenter? %>;
     presenter   = <%= valid_presenter_cookie? %>;
 
+    // Swiper transition effect configuration
+    // Valid effects: 'slide', 'fade', 'cube', 'coverflow', 'flip', 'cards', 'creative'
+    transitionEffect = "<%= @transition_effect || 'fade' %>";
+
     keymap               = <%= JSON.pretty_generate @keymap %>;
     keycode_dictionary   = <%= JSON.pretty_generate @keycode_dictionary %>;
     keycode_shifted_keys = <%= JSON.pretty_generate @keycode_shifted_keys %>;

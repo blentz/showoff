@@ -421,7 +421,7 @@ RSpec.describe Showoff::Server::FeedbackManager do
     end
 
     it 'supports unicode in feedback text' do
-      txt = "😅 — why doesn’t slide render <b>bold</b>? & more"
+      txt = "😅 — why doesn't slide render <b>bold</b>? & more"
       entry = manager.submit_feedback('uni', 's', 4, txt)
       expect(entry[:feedback]).to eq(txt)
     end
@@ -468,6 +468,162 @@ RSpec.describe Showoff::Server::FeedbackManager do
       mgr = described_class.new(persistence_file)
       rec = mgr.get_feedback('s2').first
       expect(rec[:session_id]).to eq('unknown')
+    end
+  end
+
+  # New tests for legacy_format method
+  describe '#legacy_format' do
+    it 'converts to legacy format with only rating and feedback' do
+      manager.submit_feedback('legacy1', 'sess1', 4, 'good')
+      legacy = manager.legacy_format
+      expect(legacy['legacy1'].first).to include('rating' => 4, 'feedback' => 'good')
+      expect(legacy['legacy1'].first).not_to include('session_id', 'timestamp')
+    end
+
+    it 'handles multiple slides and entries in legacy format' do
+      manager.submit_feedback('leg1', 's1', 3, 'ok')
+      manager.submit_feedback('leg1', 's2', 5, 'great')
+      manager.submit_feedback('leg2', 's3', 1, 'bad')
+
+      legacy = manager.legacy_format
+      expect(legacy.keys).to contain_exactly('leg1', 'leg2')
+      expect(legacy['leg1'].size).to eq(2)
+      expect(legacy['leg2'].size).to eq(1)
+    end
+
+    it 'returns empty hash for no feedback' do
+      expect(manager.legacy_format).to eq({})
+    end
+  end
+
+  # New tests for different feedback types
+  describe 'feedback types' do
+    it 'handles question feedback type' do
+      entry = manager.submit_feedback('q1', 'sess1', 3, 'How do I implement this?')
+      expect(entry[:feedback]).to eq('How do I implement this?')
+    end
+
+    it 'handles pace feedback type' do
+      entry = manager.submit_feedback('pace1', 'sess1', 1, 'Too fast!')
+      expect(entry[:rating]).to eq(1)
+      expect(entry[:feedback]).to eq('Too fast!')
+    end
+
+    it 'handles detailed rating feedback' do
+      entry = manager.submit_feedback('rating1', 'sess1', 5, 'Excellent explanation of concepts')
+      expect(entry[:rating]).to eq(5)
+      expect(entry[:feedback]).to eq('Excellent explanation of concepts')
+    end
+
+    it 'handles feedback with mixed content types' do
+      entry = manager.submit_feedback('mixed', 'sess1', 3, 'Pace OK but question: what about X?')
+      expect(entry[:feedback]).to include('Pace OK')
+      expect(entry[:feedback]).to include('question:')
+    end
+  end
+
+  # New tests for advanced aggregation
+  describe 'advanced aggregation' do
+    it 'calculates correct distribution with specific patterns' do
+      # Create a specific distribution pattern
+      [1, 1, 2, 3, 3, 3, 4, 5, 5].each_with_index do |rating, i|
+        manager.submit_feedback('pattern', "s#{i}", rating)
+      end
+
+      dist = manager.get_aggregated('pattern')[:distribution]
+      expect(dist[1]).to eq(2)
+      expect(dist[2]).to eq(1)
+      expect(dist[3]).to eq(3)
+      expect(dist[4]).to eq(1)
+      expect(dist[5]).to eq(2)
+    end
+
+    it 'handles all identical ratings in distribution' do
+      5.times { |i| manager.submit_feedback('same', "s#{i}", 3) }
+      dist = manager.get_aggregated('same')[:distribution]
+      expect(dist.keys).to eq([3])
+      expect(dist[3]).to eq(5)
+    end
+
+    it 'calculates average with mixed rating types' do
+      manager.submit_feedback('mixed', 's1', 2)
+      manager.submit_feedback('mixed', 's2', '4') # String that converts to integer
+      expect(manager.get_slide_rating_average('mixed')).to eq(3.0)
+    end
+  end
+
+  # New tests for export with different data types
+  describe 'export with different data types' do
+    it 'exports and loads feedback with HTML content' do
+      html_content = '<p>This is <strong>bold</strong> and <em>italic</em></p>'
+      manager.submit_feedback('html', 'sess1', 4, html_content)
+      manager.export_json
+
+      mgr2 = described_class.new(persistence_file)
+      expect(mgr2.get_feedback('html').first[:feedback]).to eq(html_content)
+    end
+
+    it 'exports and loads feedback with code snippets' do
+      code = "```ruby\ndef test\n  puts 'hello'\nend\n```"
+      manager.submit_feedback('code', 'sess1', 5, code)
+      manager.export_json
+
+      mgr2 = described_class.new(persistence_file)
+      expect(mgr2.get_feedback('code').first[:feedback]).to eq(code)
+    end
+
+    it 'exports and loads feedback with special characters' do
+      special = "Line 1\nLine 2\tTabbed\r\nWindows\u2022Bullet"
+      manager.submit_feedback('special', 'sess1', 3, special)
+      manager.export_json
+
+      mgr2 = described_class.new(persistence_file)
+      expect(mgr2.get_feedback('special').first[:feedback]).to eq(special)
+    end
+  end
+
+  # New tests for malformed input handling
+  describe 'malformed input handling' do
+    it 'handles loading malformed JSON with unexpected structure' do
+      # Create a JSON file with valid syntax but unexpected structure
+      File.write(persistence_file, '{"random": "data", "not": {"feedback": "format"}}')
+
+      expect(Kernel).to receive(:warn).with(/Failed to load feedback/)
+      mgr = described_class.new(persistence_file)
+      expect(mgr.feedback_count).to eq(0)
+    end
+
+    it 'handles loading with missing required fields' do
+      # Missing timestamp field
+      payload = {
+        'feedback' => {
+          'missing' => [
+            { 'session_id' => 's1', 'rating' => 5, 'feedback' => 'text' }
+            # No timestamp
+          ]
+        }
+      }
+      File.write(persistence_file, JSON.generate(payload))
+
+      expect(Kernel).to receive(:warn).with(/Failed to load feedback/)
+      mgr = described_class.new(persistence_file)
+    end
+
+    it 'handles loading with invalid rating values gracefully' do
+      # Invalid rating (not numeric) - gets converted to 0 via to_i
+      payload = {
+        'feedback' => {
+          'invalid' => [
+            { 'session_id' => 's1', 'rating' => 'not-a-number', 'feedback' => 'text', 'timestamp' => Time.now.iso8601 }
+          ]
+        }
+      }
+      File.write(persistence_file, JSON.generate(payload))
+
+      mgr = described_class.new(persistence_file)
+      # 'not-a-number'.to_i returns 0, so it loads successfully
+      entries = mgr.get_feedback('invalid')
+      expect(entries.first[:rating]).to eq(0)
     end
   end
 end

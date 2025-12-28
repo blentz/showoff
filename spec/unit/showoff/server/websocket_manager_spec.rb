@@ -30,9 +30,14 @@ RSpec.describe Showoff::Server::WebSocketManager do
   # Mock EventMachine
   module MockEM
     @blocks = []
+    @timers = []
 
     def self.next_tick(&block)
       @blocks << block
+    end
+
+    def self.add_timer(seconds, &block)
+      @timers << block
     end
 
     def self.run_pending_ticks
@@ -41,8 +46,41 @@ RSpec.describe Showoff::Server::WebSocketManager do
       blocks_to_run.each(&:call)
     end
 
+    def self.run_pending_timers
+      timers_to_run = @timers.dup
+      @timers.clear
+      timers_to_run.each(&:call)
+    end
+
     def self.clear_ticks
       @blocks.clear
+    end
+
+    def self.clear_timers
+      @timers.clear
+    end
+  end
+
+  # Mock FeedbackManager
+  class MockFeedbackManager
+    attr_reader :feedback_data
+
+    def initialize(filename)
+      @filename = filename
+      @feedback_data = {}
+    end
+
+    def submit_feedback(slide, session_id, rating, feedback_text)
+      @feedback_data[slide] ||= []
+      @feedback_data[slide] << {
+        session_id: session_id,
+        rating: rating,
+        feedback: feedback_text
+      }
+    end
+
+    def save_to_disk
+      # Mock implementation - do nothing
     end
   end
 
@@ -90,6 +128,7 @@ RSpec.describe Showoff::Server::WebSocketManager do
     # Stub EventMachine
     stub_const('EM', MockEM)
     MockEM.clear_ticks
+    MockEM.clear_timers
   end
 
   describe 'A. Initialization' do
@@ -209,6 +248,11 @@ RSpec.describe Showoff::Server::WebSocketManager do
       manager.add_connection(ws2, 'client-2', 's2')
       expect(manager.all_connections.size).to eq(2)
     end
+
+    it 'register_presenter returns false for non-existent connection' do
+      expect(logger).to receive(:error).with(/Attempted to register unknown connection/)
+      expect(manager.register_presenter(ws)).to be false
+    end
   end
 
   describe 'C. Message Routing' do
@@ -326,6 +370,32 @@ RSpec.describe Showoff::Server::WebSocketManager do
     it 'logs warning for unknown message type' do
       expect(logger).to receive(:warn).with(/Unknown WebSocket message type/)
       manager.handle_message(ws, { 'message' => 'wat' }.to_json, request_context)
+    end
+
+    it "handles 'position' message with nil current slide number" do
+      # Set up a callback that returns a hash with nil number
+      manager.instance_variable_set(:@current_slide_callback, ->(_) { { name: 'slide', number: nil } })
+
+      # This should not send a message
+      manager.handle_message(ws, { 'message' => 'position' }.to_json, request_context)
+      MockEM.run_pending_ticks
+
+      # The last message should not be a position response
+      if !ws.sent_messages.empty?
+        last_message = JSON.parse(ws.sent_messages.last)
+        expect(last_message['message']).not_to eq('current')
+      end
+    end
+
+    it "handles 'activity' message with no connection info" do
+      # Create a websocket that isn't registered
+      unregistered_ws = MockWebSocket.new
+
+      # This should not raise an error
+      expect {
+        manager.handle_message(unregistered_ws, { 'message' => 'activity', 'slide' => 10, 'status' => false }.to_json, request_context)
+        MockEM.run_pending_ticks
+      }.not_to raise_error
     end
   end
 
@@ -512,6 +582,14 @@ RSpec.describe Showoff::Server::WebSocketManager do
         MockEM.run_pending_ticks
         expect(JSON.parse(presenter_ws.sent_messages.last)).to include('message' => 'cancel', 'target' => 'something', 'id' => 'guid-123')
       end
+
+      it 'uses generate_guid to create unique identifiers' do
+        # Test the private method indirectly through the pace handler
+        allow(SecureRandom).to receive(:hex).with(8).and_return('custom-guid')
+        manager.handle_message(audience_ws, { 'message' => 'pace', 'rating' => 'slow' }.to_json, request_context)
+        MockEM.run_pending_ticks
+        expect(JSON.parse(presenter_ws.sent_messages.last)['id']).to eq('custom-guid')
+      end
     end
 
     context 'complete/answerkey handlers' do
@@ -553,6 +631,63 @@ RSpec.describe Showoff::Server::WebSocketManager do
         MockEM.run_pending_ticks
         expect(ws3.sent_messages).not_to be_empty
         expect(JSON.parse(ws3.sent_messages.last)).to include('message' => 'annotationConfig', 'enabled' => true)
+      end
+    end
+
+    context 'feedback handler' do
+      let(:feedback_manager) { MockFeedbackManager.new('stats/feedback.json') }
+
+      it 'handles feedback using FeedbackManager' do
+        # Mock Sinatra::Application.settings
+        settings = double('settings')
+        allow(settings).to receive(:feedback_manager).and_return(feedback_manager)
+        allow(Sinatra::Application).to receive(:settings).and_return(settings)
+
+        # Expect the feedback manager to be called
+        expect(feedback_manager).to receive(:submit_feedback).with(5, 'session-1', 4, 'Good presentation')
+        expect(feedback_manager).to receive(:save_to_disk)
+
+        # Send feedback message
+        manager.handle_message(audience_ws, {
+          'message' => 'feedback',
+          'slide' => 5,
+          'rating' => 4,
+          'feedback' => 'Good presentation'
+        }.to_json, request_context)
+      end
+
+      it 'handles feedback using legacy fallback path' do
+        # Mock File operations for legacy path
+        expect(File).to receive(:exist?).with('stats/feedback.json').and_return(true)
+        expect(File).to receive(:read).with('stats/feedback.json').and_return('{}')
+        expect(File).to receive(:write).with('stats/feedback.json', anything)
+
+        # Send feedback message
+        manager.handle_message(audience_ws, {
+          'message' => 'feedback',
+          'slide' => 6,
+          'rating' => 3,
+          'feedback' => 'Average'
+        }.to_json, request_context)
+      end
+
+      it 'handles errors in feedback processing' do
+        # Mock Sinatra::Application.settings to raise an error
+        settings = double('settings')
+        allow(settings).to receive(:feedback_manager).and_raise('Feedback error')
+        allow(Sinatra::Application).to receive(:settings).and_return(settings)
+
+        # Expect error to be logged but not propagated
+        expect(logger).to receive(:error).with(/Failed to handle feedback: Feedback error/)
+
+        expect {
+          manager.handle_message(audience_ws, {
+            'message' => 'feedback',
+            'slide' => 7,
+            'rating' => 2,
+            'feedback' => 'Poor'
+          }.to_json, request_context)
+        }.not_to raise_error
       end
     end
   end
@@ -636,6 +771,25 @@ RSpec.describe Showoff::Server::WebSocketManager do
       MockEM.run_pending_ticks
       expect(JSON.parse(p1.sent_messages.last)).to include('message' => 'presenters')
       expect(JSON.parse(a1.sent_messages.last)).to include('message' => 'audience')
+    end
+
+    it 'broadcast_to_audience with no audience is a no-op' do
+      # Create a manager with only presenters
+      m2 = described_class.new(session_state: session_state, stats_manager: stats_manager, logger: logger, current_slide_callback: current_slide_callback, downloads_callback: downloads_callback)
+      p = MockWebSocket.new
+      m2.add_connection(p, 'p', 's')
+      allow(session_state).to receive(:valid_presenter_cookie?).and_return(true)
+      m2.handle_message(p, { 'message' => 'register' }.to_json, request_context)
+      MockEM.run_pending_ticks
+
+      # This should not error
+      expect {
+        m2.broadcast_to_audience({ 'message' => 'no-audience' })
+        MockEM.run_pending_ticks
+      }.not_to raise_error
+
+      # No messages should be sent
+      expect(p.sent_messages).to be_empty
     end
   end
 

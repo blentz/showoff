@@ -1,5 +1,7 @@
 require 'spec_helper'
 require 'showoff/server/download_manager'
+require 'tempfile'
+require 'fileutils'
 
 RSpec.describe Showoff::Server::DownloadManager do
   let(:manager) { Showoff::Server::DownloadManager.new }
@@ -409,6 +411,61 @@ RSpec.describe Showoff::Server::DownloadManager do
         1 => [false, 'Slide 1', ['file1.txt']],
         2 => [true, '123', ['file2.txt']]
       })
+    end
+  end
+
+  # File existence and permission tests
+  describe 'file existence and permissions' do
+    let(:temp_dir) { Dir.mktmpdir }
+    let(:existing_file) { File.join(temp_dir, 'existing.txt') }
+    let(:missing_file) { File.join(temp_dir, 'missing.txt') }
+    let(:no_read_file) { File.join(temp_dir, 'no_read.txt') }
+
+    before do
+      # Create test files
+      File.write(existing_file, 'Test content')
+      File.write(no_read_file, 'No read permission')
+
+      # Remove read permission on no_read_file if not on Windows
+      unless Gem.win_platform?
+        FileUtils.chmod(0000, no_read_file)
+      end
+    end
+
+    after do
+      # Restore permissions for cleanup
+      unless Gem.win_platform?
+        FileUtils.chmod(0644, no_read_file) rescue nil
+      end
+
+      # Clean up temp directory
+      FileUtils.remove_entry(temp_dir)
+    end
+
+    it 'handles existing files correctly' do
+      manager.register(1, 'Existing Files', [existing_file])
+      manager.enable(1)
+
+      expect(manager.files(1)).to eq([existing_file])
+      expect(File.exist?(manager.files(1).first)).to be true
+    end
+
+    it 'handles missing files gracefully' do
+      manager.register(2, 'Missing Files', [missing_file])
+      manager.enable(2)
+
+      expect(manager.files(2)).to eq([missing_file])
+      expect(File.exist?(manager.files(2).first)).to be false
+    end
+
+    # Skip on Windows and in containers running as root where permissions don't apply
+    it 'handles permission issues gracefully', unless: Gem.win_platform? || Process.uid == 0 do
+      manager.register(3, 'Permission Issues', [no_read_file])
+      manager.enable(3)
+
+      expect(manager.files(3)).to eq([no_read_file])
+      expect(File.exist?(manager.files(3).first)).to be true
+      expect { File.read(manager.files(3).first) }.to raise_error(Errno::EACCES)
     end
   end
 

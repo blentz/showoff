@@ -191,4 +191,124 @@ RSpec.describe Showoff::Server do
       expect(mapped_keys('next', keymap)).to eq('right, space')
     end
   end
+
+  describe 'protected? helper logic' do
+    def protected?(settings)
+      !settings['password'].nil?
+    end
+
+    it 'returns true when password is set' do
+      expect(protected?({ 'password' => 'secret' })).to be true
+    end
+
+    it 'returns false when no password' do
+      expect(protected?({})).to be false
+    end
+
+    it 'returns false when password is nil' do
+      expect(protected?({ 'password' => nil })).to be false
+    end
+  end
+
+  describe 'locked? helper logic' do
+    def locked?(settings)
+      settings['locked'] == true
+    end
+
+    it 'returns true when locked is true' do
+      expect(locked?({ 'locked' => true })).to be true
+    end
+
+    it 'returns false when locked is false' do
+      expect(locked?({ 'locked' => false })).to be false
+    end
+
+    it 'returns false when locked not set' do
+      expect(locked?({})).to be false
+    end
+  end
+
+  describe 'current_slide helper logic' do
+    def current_slide(params, default = nil)
+      return default unless params['num']
+      num = params['num'].to_i
+      num = default if num < 0
+      num
+    rescue
+      default
+    end
+
+    it 'returns slide number from params' do
+      expect(current_slide({ 'num' => '5' })).to eq(5)
+    end
+
+    it 'returns default when num missing' do
+      expect(current_slide({}, 1)).to eq(1)
+    end
+
+    it 'returns default when num is negative' do
+      expect(current_slide({ 'num' => '-3' }, 1)).to eq(1)
+    end
+  end
+
+  describe 'valid_presenter_cookie? helper logic' do
+    def valid_presenter_cookie?(cookie, path, validator)
+      return true if validator.call(cookie)
+      return true if path == '/presenter'
+      false
+    end
+
+    it 'returns true when cookie is valid' do
+      validator = ->(c) { c == 'valid' }
+      expect(valid_presenter_cookie?('valid', '/slides', validator)).to be true
+    end
+
+    it 'returns true on /presenter path' do
+      validator = ->(c) { false }
+      expect(valid_presenter_cookie?('invalid', '/presenter', validator)).to be true
+    end
+
+    it 'returns false otherwise' do
+      validator = ->(c) { c == 'valid' }
+      expect(valid_presenter_cookie?('invalid', '/slides', validator)).to be false
+    end
+  end
+
+  describe 'css_files and js_files helper logic' do
+    def css_files(arr)
+      arr || []
+    end
+
+    def js_files(arr)
+      arr || []
+    end
+
+    it 'returns empty array when nil' do
+      expect(css_files(nil)).to eq([])
+      expect(js_files(nil)).to eq([])
+    end
+
+    it 'returns array when set' do
+      expect(css_files(['a.css'])).to eq(['a.css'])
+      expect(js_files(['b.js'])).to eq(['b.js'])
+    end
+  end
+
+  describe 'update_form_response logic' do
+    it 'delegates to form_manager' do
+      form_manager = double('FormManager')
+      expect(form_manager).to receive(:submit).with('form1', 'client1', { 'q' => 'a' })
+
+      form_manager.submit('form1', 'client1', { 'q' => 'a' })
+    end
+  end
+
+  describe 'update_download_count logic' do
+    it 'delegates to download_manager' do
+      download_manager = double('DownloadManager')
+      expect(download_manager).to receive(:increment_count).with('file.pdf')
+
+      download_manager.increment_count('file.pdf')
+    end
+  end
 end

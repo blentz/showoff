@@ -77,4 +77,37 @@ RSpec.describe Showoff::State do
     expect(Showoff::State.getAtIndex(:array, 13)).to eq([42, :bananas, :waffles])
   end
 
+  it "returns nil for non-existent keys" do
+    expect(Showoff::State.get(:nonexistent)).to be_nil
+  end
+
+  it "returns nil for invalid array indices" do
+    Showoff::State.append(:test, :value)
+    expect(Showoff::State.getAtIndex(:test, 100)).to be_nil
+  end
+
+  it "supports negative indices for arrays" do
+    Showoff::State.append(:test, :first)
+    Showoff::State.append(:test, :second)
+    Showoff::State.setAtIndex(:test, -1, :updated)
+    expect(Showoff::State.getAtIndex(:test, 1)).to eq(:updated)
+  end
+
+  it "resets with multiple keys" do
+    # Reset completely first, then set up test state
+    Showoff::State.reset
+    Showoff::State.set(:a, 1)
+    Showoff::State.set(:b, 2)
+    Showoff::State.set(:c, 3)
+    Showoff::State.reset(:a, :b)
+    expect(Showoff::State.keys).to eq([:c])
+  end
+
+  it "checks if key exists with include?" do
+    instance = Showoff::State.new
+    expect(instance.include?(:test)).to be_falsey
+    Showoff::State.set(:test, :value)
+    expect(instance.include?(:test)).to be_truthy
+  end
+
 end

@@ -191,7 +191,78 @@ EOF
     expect(doc.search('select').size).to eq(5)
   end
 
-  # @todo this test suite needs a lotta lotta work. This only scratches the surface
+  describe '.form_element_select_multiline' do
+    it 'parses multiline select options' do
+      text = "question = {\n   US -> American\n   IT -> Italian\n   FR -> French\n}"
+      result = described_class.form_element_select_multiline('q1', 'country', text)
+      expect(result).to include('<select')
+      expect(result).to include("value='US'")
+      expect(result).to include('>American</option>')
+    end
+
+    it 'handles selected option with parentheses' do
+      text = "question = {\n   (US -> United States)\n}"
+      result = described_class.form_element_select_multiline('q1', 'country', text)
+      expect(result).to include('selected')
+    end
+
+    it 'handles correct option with brackets' do
+      text = "question = {\n   [US -> United States]\n}"
+      result = described_class.form_element_select_multiline('q1', 'country', text)
+      expect(result).to include("class='correct'")
+    end
+  end
+
+  describe '.form_element_multiline' do
+    it 'creates list of radio inputs' do
+      text = "question =\n(=) yes -> Yes\n() no -> No"
+      result = described_class.form_element_multiline('q1', 'answer', text)
+      expect(result).to include('<ul>')
+      expect(result).to include('<li>')
+      expect(result).to include("type='radio'")
+    end
+
+    it 'creates list of checkbox inputs' do
+      text = "question =\n[=] opt1 -> Option 1\n[] opt2 -> Option 2"
+      result = described_class.form_element_multiline('q1', 'opts', text)
+      expect(result).to include("type='checkbox'")
+    end
+  end
+
+  describe '.form_element_check_or_radio_set' do
+    it 'handles items with arrow notation' do
+      items = [['', 'yes -> Yes option'], ['=', 'no -> No option']]
+      result = described_class.form_element_check_or_radio_set('radio', 'q1', 'answer', items)
+      expect(result).to include("value='yes'")
+      expect(result).to include('>Yes option</label>')
+    end
+
+    it 'handles items without arrow notation' do
+      items = [['', 'simple']]
+      result = described_class.form_element_check_or_radio_set('radio', 'q1', 'answer', items)
+      expect(result).to include("value='simple'")
+      expect(result).to include('>simple</label>')
+    end
+  end
+
+  describe '.form_element' do
+    it 'creates text input element' do
+      result = described_class.form_element('q1', 'name', 'Name', false, '___[50]', 'name = ___[50]')
+      expect(result).to include('form element')
+      expect(result).to include("type='text'")
+    end
+
+    it 'creates textarea element' do
+      result = described_class.form_element('q1', 'comments', 'Comments', false, '[   5]', 'comments = [   5]')
+      expect(result).to include('textarea')
+      expect(result).to include("rows='5'")
+    end
+
+    it 'marks required elements' do
+      result = described_class.form_element('q1', 'name', 'Name', true, '___', 'name *= ___')
+      expect(result).to include('required')
+    end
+  end
 end
 
 

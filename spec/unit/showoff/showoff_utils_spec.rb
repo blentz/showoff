@@ -518,4 +518,137 @@ RSpec.describe ShowoffUtils do
       expect(described_class::EXTENSIONS).to include('rb' => 'ruby', 'pl' => 'perl')
     end
   end
+
+  describe '.lang' do
+    it 'returns ruby for .rb files' do
+      expect(described_class.lang('test.rb')).to eq('ruby')
+    end
+
+    it 'returns perl for .pl files' do
+      expect(described_class.lang('test.pl')).to eq('perl')
+    end
+
+    it 'returns erlang for .erl files' do
+      expect(described_class.lang('test.erl')).to eq('erlang')
+    end
+
+    it 'returns extension for unknown types' do
+      expect(described_class.lang('test.xyz')).to eq('xyz')
+    end
+  end
+
+  describe '.clone' do
+    it 'clones a git repository and yields to block' do
+      expect(Dir).to receive(:mktmpdir).and_yield('/tmp/testdir')
+      expect(described_class).to receive(:system).with('git', 'clone', '--depth', '1', 'https://example.com/repo.git', '/tmp/testdir').and_return(true)
+      expect(Dir).to receive(:chdir).with('/tmp/testdir').and_yield
+
+      block_called = false
+      described_class.clone('https://example.com/repo.git') { block_called = true }
+      expect(block_called).to be true
+    end
+
+    it 'clones a specific branch when specified' do
+      expect(Dir).to receive(:mktmpdir).and_yield('/tmp/testdir')
+      expect(described_class).to receive(:system).with('git', 'clone', '-b', 'develop', '--single-branch', '--depth', '1', 'https://example.com/repo.git', '/tmp/testdir').and_return(true)
+      expect(Dir).to receive(:chdir).with('/tmp/testdir').and_yield
+
+      described_class.clone('https://example.com/repo.git', 'develop') {}
+    end
+
+    it 'changes to subdirectory when path is specified' do
+      expect(Dir).to receive(:mktmpdir).and_yield('/tmp/testdir')
+      expect(described_class).to receive(:system).with('git', 'clone', '--depth', '1', 'https://example.com/repo.git', '/tmp/testdir').and_return(true)
+      expect(Dir).to receive(:chdir).with('/tmp/testdir/subdir').and_yield
+
+      described_class.clone('https://example.com/repo.git', nil, 'subdir') {}
+    end
+  end
+
+  describe '.update' do
+    it 'runs git pull' do
+      expect(described_class).to receive(:system).with('git', 'pull').and_return(true)
+      described_class.update
+    end
+
+    it 'outputs message when verbose' do
+      expect(described_class).to receive(:system).with('git', 'pull').and_return(true)
+      expect { described_class.update(true) }.to output(/Updating presentation repository/).to_stdout
+    end
+  end
+
+  describe '.command' do
+    it 'runs command and outputs message' do
+      expect(described_class).to receive(:system).with('echo test').and_return(true)
+      expect { described_class.command('echo test') }.to output(/Running 'echo test'/).to_stdout
+    end
+
+    it 'raises error when command fails' do
+      expect(described_class).to receive(:system).with('false').and_return(false)
+      expect { described_class.command('false', 'custom error') }.to raise_error('custom error')
+    end
+  end
+
+  describe '.showoff_slide_files' do
+    it 'returns flattened list of files from sections' do
+      sections = { 'sec1' => ['a.md', 'b.md'], 'sec2' => ['c.md'] }
+      allow(described_class).to receive(:showoff_sections).and_return(sections)
+
+      result = described_class.showoff_slide_files('.')
+      expect(result).to eq(['a.md', 'b.md', 'c.md'])
+    end
+  end
+
+  describe '.showoff_renderer_options' do
+    it 'returns options with symbol keys' do
+      Dir.mktmpdir do |dir|
+        File.write(File.join(dir, 'showoff.json'), JSON.dump({
+          'markdown' => 'redcarpet',
+          'redcarpet' => { 'autolink' => true }
+        }))
+        described_class.presentation_config_file = 'showoff.json'
+        result = described_class.showoff_renderer_options(dir)
+        expect(result).to be_a(Hash)
+        expect(result.keys.first).to be_a(Symbol)
+      end
+    end
+  end
+
+  describe '.create_file_if_needed' do
+    it 'creates file when it does not exist' do
+      Dir.mktmpdir do |dir|
+        path = File.join(dir, 'newfile.txt')
+        result = described_class.create_file_if_needed(path, false) do |f|
+          f.puts 'content'
+        end
+        expect(result).to be true
+        expect(File.read(path)).to include('content')
+      end
+    end
+
+    it 'does not overwrite existing file without force' do
+      Dir.mktmpdir do |dir|
+        path = File.join(dir, 'existing.txt')
+        File.write(path, 'original')
+        result = nil
+        expect {
+          result = described_class.create_file_if_needed(path, false) { |f| f.puts 'new' }
+        }.to output(/exists; not overwriting/).to_stdout
+        expect(result).to be false
+        expect(File.read(path)).to eq('original')
+      end
+    end
+
+    it 'overwrites existing file when force is true' do
+      Dir.mktmpdir do |dir|
+        path = File.join(dir, 'existing.txt')
+        File.write(path, 'original')
+        result = described_class.create_file_if_needed(path, true) do |f|
+          f.puts 'new'
+        end
+        expect(result).to be true
+        expect(File.read(path)).to include('new')
+      end
+    end
+  end
 end

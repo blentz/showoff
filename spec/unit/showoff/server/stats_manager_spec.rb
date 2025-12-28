@@ -3,6 +3,7 @@ require 'showoff/server/stats_manager'
 require 'tmpdir'
 require 'json'
 require 'time'
+require 'csv'
 
 RSpec.describe Showoff::Server::StatsManager do
   # Use a temp directory for any persistence-related specs
@@ -83,7 +84,7 @@ RSpec.describe Showoff::Server::StatsManager do
 
     it 'records question submissions including special characters' do
       ts = Time.now
-      txt = "WTF 😅 — why doesn’t slide #2 render <b>bold</b>? & can we fix it?"
+      txt = "WTF 😅 — why doesn't slide #2 render <b>bold</b>? & can we fix it?"
       stats.record_question('abc', txt, ts)
 
       qs = stats.get_questions
@@ -106,6 +107,31 @@ RSpec.describe Showoff::Server::StatsManager do
 
       expect { stats.record_pace('sX', :bananas) }.to raise_error(ArgumentError, /Invalid pace rating/)
       expect { stats.record_pace('sX', 'FAST') }.to raise_error(ArgumentError)
+    end
+
+    it 'calculates elapsed time correctly when recording sequential views' do
+      now = Time.now
+
+      # First view has no elapsed time
+      stats.record_view(1, 'session1', now)
+
+      # Second view on same slide should not calculate elapsed time
+      stats.record_view(1, 'session1', now + 30)
+
+      # View on different slide should calculate elapsed time
+      stats.record_view(2, 'session1', now + 60)
+
+      # Get the internal views data for verification
+      views = stats.instance_eval { @views }
+
+      # First view should have 0 elapsed time
+      expect(views[1].first[:elapsed]).to eq(0)
+
+      # Second view on same slide should have 0 elapsed time
+      expect(views[1].last[:elapsed]).to eq(0)
+
+      # View on slide 2 should have elapsed time of about 30 seconds
+      expect(views[2].first[:elapsed]).to be_within(0.1).of(30)
     end
   end
 
@@ -146,6 +172,44 @@ RSpec.describe Showoff::Server::StatsManager do
       expect(agg[:most_viewed_slides]).to eq([])
       expect(agg[:least_viewed_slides]).to eq([])
     end
+
+    it 'returns most viewed slides with custom limit' do
+      # Create a test instance with access to private methods
+      test_stats = stats
+
+      # Add view data
+      5.times { |i| test_stats.record_view(1, "s#{i}") }
+      4.times { |i| test_stats.record_view(2, "s#{i}") }
+      3.times { |i| test_stats.record_view(3, "s#{i}") }
+      2.times { |i| test_stats.record_view(4, "s#{i}") }
+      1.times { |i| test_stats.record_view(5, "s#{i}") }
+
+      # Call the private method with a custom limit
+      most_viewed = test_stats.send(:most_viewed_slides_unsafe, 3)
+
+      # Verify results
+      expect(most_viewed.size).to eq(3)
+      expect(most_viewed).to eq([[1, 5], [2, 4], [3, 3]])
+    end
+
+    it 'returns least viewed slides with custom limit' do
+      # Create a test instance with access to private methods
+      test_stats = stats
+
+      # Add view data
+      5.times { |i| test_stats.record_view(1, "s#{i}") }
+      4.times { |i| test_stats.record_view(2, "s#{i}") }
+      3.times { |i| test_stats.record_view(3, "s#{i}") }
+      2.times { |i| test_stats.record_view(4, "s#{i}") }
+      1.times { |i| test_stats.record_view(5, "s#{i}") }
+
+      # Call the private method with a custom limit
+      least_viewed = test_stats.send(:least_viewed_slides_unsafe, 2)
+
+      # Verify results
+      expect(least_viewed.size).to eq(2)
+      expect(least_viewed).to eq([[5, 1], [4, 2]])
+    end
   end
 
   describe 'legacy counter compatibility methods' do
@@ -179,6 +243,14 @@ RSpec.describe Showoff::Server::StatsManager do
         expect(result['2']['user1'].first['elapsed']).to be_within(0.1).of(60)
         expect(result['3']['user2'].first['elapsed']).to be_within(0.1).of(60)
       end
+
+      it 'handles empty views gracefully' do
+        empty_stats = described_class.new
+        result = empty_stats.pageviews
+
+        expect(result).to be_a(Hash)
+        expect(result).to be_empty
+      end
     end
 
     describe '#current_viewers' do
@@ -196,6 +268,14 @@ RSpec.describe Showoff::Server::StatsManager do
 
         expect(result['user2'][0]).to eq(3) # Last slide viewed
       end
+
+      it 'handles sessions with incomplete data' do
+        # Create a session with only user agent but no slide data
+        stats.record_user_agent('incomplete_user', 'Test Agent')
+
+        result = stats.current_viewers
+        expect(result).not_to have_key('incomplete_user')
+      end
     end
 
     describe '#user_agents' do
@@ -205,6 +285,14 @@ RSpec.describe Showoff::Server::StatsManager do
         expect(result).to be_a(Hash)
         expect(result['user1']).to eq('Mozilla/5.0 Test Agent 1')
         expect(result['user2']).to eq('Mozilla/5.0 Test Agent 2')
+      end
+
+      it 'handles sessions without user agents' do
+        # Record a view without user agent
+        stats.record_view(1, 'no_agent_user', Time.now)
+
+        result = stats.user_agents
+        expect(result).not_to have_key('no_agent_user')
       end
     end
 
@@ -219,6 +307,28 @@ RSpec.describe Showoff::Server::StatsManager do
         expect(result['1']).to be_within(0.1).of(120)
         expect(result['2']).to be_within(0.1).of(60)
         expect(result['3']).to be_within(0.1).of(60)
+      end
+
+      it 'handles empty views gracefully' do
+        empty_stats = described_class.new
+        result = empty_stats.elapsed_time_per_slide
+
+        expect(result).to be_a(Hash)
+        expect(result).to be_empty
+      end
+
+      it 'handles views with zero elapsed time' do
+        now = Time.now
+        test_stats = described_class.new
+
+        # Record views without elapsed time
+        test_stats.record_view(1, 'user1', now)
+        test_stats.record_view(2, 'user2', now)
+
+        result = test_stats.elapsed_time_per_slide
+
+        expect(result['1']).to eq(0)
+        expect(result['2']).to eq(0)
       end
     end
 
@@ -247,6 +357,16 @@ RSpec.describe Showoff::Server::StatsManager do
         stats.record_user_agent('user1', 'Updated Agent')
 
         expect(stats.user_agents['user1']).to eq('Updated Agent')
+      end
+
+      it 'handles nil user agent gracefully' do
+        expect {
+          stats.record_user_agent('nil_agent_user', nil)
+        }.not_to raise_error
+
+        # The nil value should be stored
+        session_data = stats.instance_eval { @session_data }
+        expect(session_data['nil_agent_user'][:user_agent]).to be_nil
       end
     end
   end
@@ -297,6 +417,20 @@ RSpec.describe Showoff::Server::StatsManager do
       expect(q['question']).to eq('How are you?')
       expect(q['timestamp']).to be_a(String)
       expect { Time.parse(q['timestamp']) }.not_to raise_error
+    end
+
+    it 'creates directory structure if it does not exist' do
+      nested_path = File.join(tmp_dir, 'nested', 'path', 'stats.json')
+      nested_stats = described_class.new(nested_path)
+
+      # Record some data
+      nested_stats.record_view(1, 'user1', Time.now)
+
+      # Export should create directories
+      expect(Dir.exist?(File.join(tmp_dir, 'nested', 'path'))).to be false
+      nested_stats.export_json
+      expect(Dir.exist?(File.join(tmp_dir, 'nested', 'path'))).to be true
+      expect(File.exist?(nested_path)).to be true
     end
 
     it 'loads from JSON file and converts timestamps back to Time' do
@@ -414,6 +548,49 @@ RSpec.describe Showoff::Server::StatsManager do
       expect(session_data).to be_a(Hash)
       expect(session_data).to be_empty
     end
+
+    it 'handles missing views data in JSON file' do
+      payload = {
+        questions: [
+          { session_id: 'cc', question: 'Q1', timestamp: Time.now.iso8601 }
+        ],
+        pace: { good: 3 },
+        exported_at: Time.now.iso8601
+      }
+      File.write(persistence_file, JSON.generate(payload))
+
+      expect {
+        mgr = described_class.new(persistence_file)
+      }.not_to raise_error
+
+      # Should have loaded questions and pace but no views
+      mgr = described_class.new(persistence_file)
+      expect(mgr.get_stats[:views]).to eq({})
+      expect(mgr.get_questions.size).to eq(1)
+      expect(mgr.get_stats[:pace][:good]).to eq(3)
+    end
+
+    it 'handles missing pace data in JSON file' do
+      payload = {
+        views: {
+          '1' => [
+            { session_id: 'aa', timestamp: Time.now.iso8601 }
+          ]
+        },
+        questions: [],
+        exported_at: Time.now.iso8601
+      }
+      File.write(persistence_file, JSON.generate(payload))
+
+      expect {
+        mgr = described_class.new(persistence_file)
+      }.not_to raise_error
+
+      # Should have loaded views but no pace data
+      mgr = described_class.new(persistence_file)
+      expect(mgr.get_view_count(1)).to eq(1)
+      expect(mgr.get_stats[:pace]).to eq({})
+    end
   end
 
   describe 'thread safety' do
@@ -496,6 +673,34 @@ RSpec.describe Showoff::Server::StatsManager do
       expect(agents.size).to eq(8) # One entry per session
       expect(agents["sess-0"]).to eq("agent-#{per_thread-1}") # Last one wins
     end
+
+    it 'handles concurrent export and view recording' do
+      view_count = 50
+      threads = []
+      views_done = false
+
+      # Thread for recording views
+      threads << Thread.new do
+        view_count.times do |i|
+          stats.record_view(i % 5, "session-#{i}")
+        end
+        views_done = true
+      end
+
+      # Thread for exporting (runs concurrently but doesn't wait on views)
+      threads << Thread.new do
+        5.times do
+          stats.export_json
+          sleep 0.01 # Small delay between exports
+        end
+      end
+
+      threads.each(&:join)
+
+      # Verify data integrity after both threads complete
+      expect(stats.get_stats[:total_views]).to eq(view_count)
+      expect(File.exist?(persistence_file)).to be true
+    end
   end
 
   describe '#clear' do
@@ -522,6 +727,127 @@ RSpec.describe Showoff::Server::StatsManager do
       expect(stats.user_agents).to be_empty
       expect(stats.current_viewers).to be_empty
       expect(stats.elapsed_time_per_slide).to be_empty
+    end
+  end
+
+  describe 'CSV export' do
+    it 'can export view data to CSV format' do
+      # Add some test data
+      now = Time.now
+      stats.record_view(1, 'user1', now)
+      stats.record_view(2, 'user1', now + 60)
+      stats.record_view(1, 'user2', now + 30)
+      stats.record_view(3, 'user2', now + 90)
+
+      # Export to CSV string
+      csv_data = CSV.generate do |csv|
+        csv << ['Slide', 'Views', 'Unique Viewers', 'Avg Time (sec)']
+
+        stats.get_stats[:views].sort.each do |slide_num, count|
+          # Get unique viewers
+          views = stats.instance_eval { @views[slide_num] }
+          unique_viewers = views.map { |v| v[:session_id] }.uniq.size
+
+          # Calculate average time if there's elapsed time data
+          total_elapsed = views.sum { |v| v[:elapsed].to_f }
+          avg_time = views.any? { |v| v[:elapsed].to_f > 0 } ? (total_elapsed / views.size).round(1) : 0
+
+          csv << [slide_num, count, unique_viewers, avg_time]
+        end
+      end
+
+      # Parse the CSV to verify
+      parsed = CSV.parse(csv_data, headers: true)
+      expect(parsed.size).to eq(3) # 3 slides
+
+      # Check slide 1 data
+      slide1 = parsed.find { |row| row['Slide'] == '1' }
+      expect(slide1['Views']).to eq('2')
+      expect(slide1['Unique Viewers']).to eq('2')
+
+      # Check slide 2 data
+      slide2 = parsed.find { |row| row['Slide'] == '2' }
+      expect(slide2['Views']).to eq('1')
+      expect(slide2['Unique Viewers']).to eq('1')
+      expect(slide2['Avg Time (sec)']).to eq('60.0')
+
+      # Check slide 3 data
+      slide3 = parsed.find { |row| row['Slide'] == '3' }
+      expect(slide3['Views']).to eq('1')
+      expect(slide3['Unique Viewers']).to eq('1')
+      expect(slide3['Avg Time (sec)']).to eq('60.0')
+    end
+
+    it 'can export questions to CSV format' do
+      # Add some test questions
+      now = Time.now
+      stats.record_question('user1', 'First question?', now - 120)
+      stats.record_question('user2', 'Second question?', now - 60)
+      stats.record_question('user1', 'Follow-up question!', now)
+
+      # Export to CSV string
+      csv_data = CSV.generate do |csv|
+        csv << ['Timestamp', 'Session', 'Question']
+
+        stats.get_questions.sort_by { |q| q[:timestamp] }.each do |q|
+          csv << [q[:timestamp].strftime('%Y-%m-%d %H:%M:%S'), q[:session_id], q[:question]]
+        end
+      end
+
+      # Parse the CSV to verify
+      parsed = CSV.parse(csv_data, headers: true)
+      expect(parsed.size).to eq(3) # 3 questions
+
+      # Verify content
+      expect(parsed[0]['Session']).to eq('user1')
+      expect(parsed[0]['Question']).to eq('First question?')
+
+      expect(parsed[1]['Session']).to eq('user2')
+      expect(parsed[1]['Question']).to eq('Second question?')
+
+      expect(parsed[2]['Session']).to eq('user1')
+      expect(parsed[2]['Question']).to eq('Follow-up question!')
+    end
+
+    it 'can export pace feedback to CSV format' do
+      # Add some pace feedback
+      stats.record_pace('user1', :too_fast)
+      stats.record_pace('user2', :good)
+      stats.record_pace('user3', :too_slow)
+      stats.record_pace('user4', :good)
+      stats.record_pace('user5', :too_fast)
+
+      # Export to CSV string
+      csv_data = CSV.generate do |csv|
+        csv << ['Feedback', 'Count', 'Percentage']
+
+        pace_data = stats.get_stats[:pace]
+        total = pace_data.values.sum.to_f
+
+        pace_data.each do |rating, count|
+          percentage = total > 0 ? (count / total * 100).round(1) : 0
+          csv << [rating.to_s, count, "#{percentage}%"]
+        end
+      end
+
+      # Parse the CSV to verify
+      parsed = CSV.parse(csv_data, headers: true)
+      expect(parsed.size).to eq(3) # 3 types of feedback
+
+      # Find each feedback type
+      too_fast = parsed.find { |row| row['Feedback'] == 'too_fast' }
+      good = parsed.find { |row| row['Feedback'] == 'good' }
+      too_slow = parsed.find { |row| row['Feedback'] == 'too_slow' }
+
+      # Verify counts
+      expect(too_fast['Count']).to eq('2')
+      expect(good['Count']).to eq('2')
+      expect(too_slow['Count']).to eq('1')
+
+      # Verify percentages
+      expect(too_fast['Percentage']).to eq('40.0%')
+      expect(good['Percentage']).to eq('40.0%')
+      expect(too_slow['Percentage']).to eq('20.0%')
     end
   end
 end

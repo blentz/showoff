@@ -77,4 +77,148 @@ EOF
     expect(doc.search('.slide.glossary.name li a')[3][:href]).to eq('#content:2')
   end
 
+  # New tests for empty glossary
+  it "handles an empty glossary page with no entries" do
+    empty_glossary_html = <<-EOF
+<div id="content1" class="slide glossary" style="" data-section="." data-title="content" data-transition="none">
+  <div class="content glossary" ref="content:1">
+    <h1 class="section_title">.</h1>
+    <h1>Empty Glossary</h1>
+    <p>This glossary has no entries.</p>
+  </div>
+  <canvas class="annotations"></canvas>
+</div>
+EOF
+    doc = Nokogiri::HTML::DocumentFragment.parse(empty_glossary_html)
+
+    Showoff::Compiler::Glossary.generatePage!(doc)
+
+    # Verify the glossary page exists but has no entries
+    expect(doc.search('.slide.glossary').size).to eq(1)
+    expect(doc.search('.slide.glossary .content').size).to eq(1)
+    expect(doc.search('.slide.glossary .terms').size).to eq(1)
+    expect(doc.search('.slide.glossary .terms li').size).to eq(0)
+  end
+
+  # New tests for duplicate entries
+  it "de-duplicates glossary entries with the same term" do
+    duplicate_entries_html = <<-EOF
+<div id="content1" class="slide glossary" style="" data-section="." data-title="content" data-transition="none">
+  <div class="content glossary" ref="content:1">
+    <h1 class="section_title">.</h1>
+    <h1>Glossary with Duplicates</h1>
+  </div>
+  <canvas class="annotations"></canvas>
+</div>
+<div id="content2" class="slide" style="" data-section="." data-title="content" data-transition="none">
+  <div class="content" ref="content:2">
+    <h1>Slide with duplicate glossary entries</h1>
+    <p class="callout glossary" data-term="Duplicate Term" data-target="duplicate" data-text="First definition">
+      <a class="processed label" href="glossary://duplicate">Duplicate Term</a>First definition
+    </p>
+    <p class="callout glossary" data-term="Duplicate Term" data-target="duplicate" data-text="Second definition">
+      <a class="processed label" href="glossary://duplicate">Duplicate Term</a>Second definition
+    </p>
+  </div>
+</div>
+EOF
+    doc = Nokogiri::HTML::DocumentFragment.parse(duplicate_entries_html)
+
+    Showoff::Compiler::Glossary.generatePage!(doc)
+
+    # Verify only one entry exists for the duplicate term
+    expect(doc.search('.slide.glossary .terms li').size).to eq(1)
+    expect(doc.search('.slide.glossary .terms li a.label').first.content).to eq('Duplicate Term')
+  end
+
+  # New tests for missing href attributes
+  it "skips links with missing href attributes during page generation" do
+    missing_href_html = <<-EOF
+<div id="content1" class="slide glossary" style="" data-section="." data-title="content" data-transition="none">
+  <div class="content glossary" ref="content:1">
+    <h1 class="section_title">.</h1>
+    <h1>Glossary Page</h1>
+  </div>
+  <canvas class="annotations"></canvas>
+</div>
+<div id="content2" class="slide" style="" data-section="." data-title="content" data-transition="none">
+  <div class="content" ref="content:2">
+    <h1>Slide with links</h1>
+    <p><a class="term" title="Valid link">Valid link with no href</a></p>
+    <p><a href="glossary://valid-term" class="term" title="Valid link">Valid glossary link</a></p>
+    <p><a href="https://example.com" class="term" title="Non-glossary link">Non-glossary link</a></p>
+  </div>
+</div>
+EOF
+    doc = Nokogiri::HTML::DocumentFragment.parse(missing_href_html)
+
+    # Count links before processing
+    links_before = doc.search('a').size
+
+    Showoff::Compiler::Glossary.generatePage!(doc)
+
+    # Verify links without href are skipped and don't cause errors
+    expect(doc.search('.slide.glossary .terms li').size).to eq(0)
+    expect(doc.search('a').size).to eq(links_before) # No links should be removed
+  end
+
+  # Test for glossary entries from callouts
+  it "generates glossary from callouts that match the glossary name" do
+    callout_html = <<-EOF
+<div id="content1" class="slide glossary" style="" data-section="." data-title="content" data-transition="none">
+  <div class="content glossary" ref="content:1">
+    <h1 class="section_title">.</h1>
+    <h1>Glossary Page</h1>
+  </div>
+  <canvas class="annotations"></canvas>
+</div>
+<div id="content2" class="slide" style="" data-section="." data-title="content" data-transition="none">
+  <div class="content" ref="content:2">
+    <h1>Slide with callouts</h1>
+    <p class="callout glossary" data-term="Term One" data-target="complete" data-text="First entry">
+      <a class="processed label" href="glossary://complete">Term One</a>First entry
+    </p>
+    <p class="callout glossary" data-term="Term Two" data-target="complete" data-text="Second entry">
+      <a class="processed label" href="glossary://complete">Term Two</a>Second entry
+    </p>
+  </div>
+</div>
+EOF
+    doc = Nokogiri::HTML::DocumentFragment.parse(callout_html)
+
+    Showoff::Compiler::Glossary.generatePage!(doc)
+
+    # The callouts have no matching glossary name (nil vs nil should match)
+    # so they should be included in the default glossary
+    terms = doc.search('.slide.glossary .terms li')
+    expect(terms.size).to eq(2)
+  end
+
+  # Test for link rewriting with callouts
+  it "includes callout terms in glossary" do
+    link_rewriting_html = <<-EOF
+<div id="content1" class="slide glossary" style="" data-section="." data-title="content" data-transition="none">
+  <div class="content glossary" ref="content:1">
+    <h1 class="section_title">.</h1>
+    <h1>Glossary Page</h1>
+  </div>
+  <canvas class="annotations"></canvas>
+</div>
+<div id="content2" class="slide" style="" data-section="." data-title="content" data-transition="none">
+  <div class="content" ref="content:2">
+    <h1>Slide with links</h1>
+    <p class="callout glossary" data-term="term1" data-target="term1" data-text="Term one definition">
+      <a class="processed label" href="glossary://term1">term1</a>Term one definition
+    </p>
+  </div>
+</div>
+EOF
+    doc = Nokogiri::HTML::DocumentFragment.parse(link_rewriting_html)
+
+    Showoff::Compiler::Glossary.generatePage!(doc)
+
+    # Verify the glossary has terms
+    terms = doc.search('.slide.glossary .terms li')
+    expect(terms.size).to eq(1)
+  end
 end

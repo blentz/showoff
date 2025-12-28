@@ -1,0 +1,721 @@
+= Feature Specification: Code Animation (Step-by-Step Highlighting & Magic Move)
+
+*Status:* Proposed
+*Priority:* Medium
+*Complexity:* 7/10
+*Utility:* 7/10
+*Eye Candy:* 9/10
+
+== Overview
+
+Two related features for animating code in presentations:
+
+1. *Step-by-Step Line Highlighting:* Progressively highlight different lines
+   of a code block as the presenter advances through a slide.
+
+2. *Magic Move:* When transitioning between two code blocks, animate the
+   diff - lines slide into position, additions fade in, deletions fade out.
+
+These are signature features of Reveal.js and Slidev that make technical
+presentations significantly more engaging and easier to follow.
+
+== Problem Statement
+
+Current code presentation limitations:
+
+* Code blocks are static - entire block visible at once
+* No way to draw attention to specific lines
+* Refactoring explanations require duplicating code across slides
+* Audience loses context when code changes between slides
+* Presenter must verbally direct "look at line 5" (error-prone)
+
+Competitors' advantages:
+
+* Reveal.js: +data-line-numbers="3-5|8-10"+ for step-through highlighting
+* Slidev: "Shiki Magic Move" animates code transformations
+* Both: Standard expectations for technical conference talks
+
+== Goals
+
+=== Step-by-Step Highlighting
+
+* Syntax to specify which lines to highlight at each step
+* Smooth transition between highlight states
+* Line numbers displayed (with offset support)
+* Dim non-highlighted lines (not hide)
+* Work with existing highlight.js integration
+
+=== Magic Move
+
+* Detect code block pairs across slide transitions
+* Compute diff and generate transition animation
+* Lines that move: animate position
+* Lines added: fade in
+* Lines removed: fade out
+* Lines unchanged: stay in place
+
+== Non-Goals
+
+* Live code editing (Monaco integration - separate feature)
+* Multi-file diffs (too complex for v1)
+* Syntax-aware animations (token-level, not line-level)
+
+== User Stories
+
+=== US-1: Presenter explains code step-by-step
+
+  GIVEN I have a code block with step annotations
+  WHEN I advance through the slide (spacebar/arrow)
+  THEN different lines are highlighted at each step
+  AND previously highlighted lines dim
+  AND I don't advance to next slide until all steps complete
+
+=== US-2: Presenter shows refactoring
+
+  GIVEN I have two slides with related code blocks
+  WHEN I transition from slide 1 to slide 2
+  THEN the code animates from state 1 to state 2
+  AND I can see what changed without mental diff
+
+=== US-3: Author specifies line ranges
+
+  GIVEN I am writing a code block in markdown
+  WHEN I add step annotations like [1-3|5-7|10]
+  THEN the renderer creates appropriate animation steps
+  AND the annotations don't appear in rendered output
+
+== Technical Design: Step-by-Step Highlighting
+
+=== Markdown Syntax
+
+Extend fenced code blocks with line highlighting syntax:
+
+  ```ruby {1-3|5-7|10-12}
+  def calculate_total(items)
+    subtotal = items.sum(&:price)    # Step 1: highlight 1-3
+    tax_rate = 0.08
+
+    tax = subtotal * tax_rate         # Step 2: highlight 5-7
+    shipping = calculate_shipping(items)
+
+    total = subtotal + tax + shipping # Step 3: highlight 10-12
+    format_currency(total)
+  end
+  ```
+
+Syntax breakdown:
+* +{...}+ after language: highlight specification
+* +|+ separates steps
+* +1-3+ means lines 1 through 3
+* +5,7,9+ means lines 5, 7, and 9 (comma-separated)
+* Empty step +||+ means show all lines unhighlighted
+
+=== Additional Options
+
+  ```ruby {1-3|5-7} [startLine=10] [showLineNumbers]
+  # Code starts at line 10 (useful for excerpts)
+  ```
+
+Options:
+* +startLine=N+ - Line numbers start at N
+* +showLineNumbers+ - Display line numbers (default: true)
+* +hideLineNumbers+ - Hide line numbers
+
+=== Compiler Implementation
+
+  # lib/showoff/compiler/code_highlight.rb
+
+  module Showoff
+    module Compiler
+      class CodeHighlight
+        HIGHLIGHT_PATTERN = /^```(\w+)\s*\{([^}]+)\}(.*)$/
+
+        def self.process!(doc, options = {})
+          doc.css('pre > code').each do |code_block|
+            # Check if parent pre has highlight annotation
+            pre = code_block.parent
+            info_string = pre['data-info-string'] || ''
+
+            if match = info_string.match(HIGHLIGHT_PATTERN)
+              language = match[1]
+              steps = parse_steps(match[2])
+              extra_options = parse_options(match[3])
+
+              apply_highlighting(pre, code_block, steps, extra_options)
+            end
+          end
+        end
+
+        def self.parse_steps(spec)
+          # "1-3|5-7|10" => [[1,2,3], [5,6,7], [10]]
+          spec.split('|').map do |step|
+            step.split(',').flat_map do |range|
+              if range.include?('-')
+                start, finish = range.split('-').map(&:to_i)
+                (start..finish).to_a
+              else
+                [range.to_i]
+              end
+            end
+          end
+        end
+
+        def self.apply_highlighting(pre, code, steps, options)
+          # Wrap each line in a span for targeting
+          lines = code.inner_html.split("\n")
+
+          wrapped_lines = lines.each_with_index.map do |line, idx|
+            line_num = idx + 1 + (options[:start_line] || 0)
+            %(<span class="code-line" data-line="#{line_num}">#{line}</span>)
+          end
+
+          code.inner_html = wrapped_lines.join("\n")
+
+          # Add data attributes for JavaScript
+          pre['data-highlight-steps'] = steps.to_json
+          pre['data-current-step'] = '0'
+          pre['class'] = (pre['class'] || '') + ' has-highlight-steps'
+
+          # Add line numbers if enabled
+          if options[:show_line_numbers] != false
+            add_line_numbers(pre, lines.length, options[:start_line] || 1)
+          end
+        end
+
+        def self.add_line_numbers(pre, count, start)
+          numbers = (start...(start + count)).map do |n|
+            %(<span class="line-number">#{n}</span>)
+          end
+
+          line_numbers_el = %(<div class="line-numbers">#{numbers.join}</div>)
+          pre.add_previous_sibling(line_numbers_el)
+          pre.parent['class'] = (pre.parent['class'] || '') + ' has-line-numbers'
+        end
+      end
+    end
+  end
+
+=== CSS for Highlighting
+
+  /* public/css/code-highlight.css */
+
+  /* Container for code with line numbers */
+  .has-line-numbers {
+    display: flex;
+    gap: 0;
+  }
+
+  .line-numbers {
+    display: flex;
+    flex-direction: column;
+    padding: 1rem 0.75rem 1rem 1rem;
+    background: var(--showoff-color-code-background);
+    border-right: 1px solid var(--showoff-color-border);
+    text-align: right;
+    user-select: none;
+    font-family: var(--showoff-font-family-code);
+    font-size: 0.85em;
+    color: var(--showoff-color-text-muted);
+  }
+
+  /* Individual code lines */
+  .code-line {
+    display: block;
+    padding: 0 1rem;
+    transition:
+      background-color var(--showoff-transition-fast),
+      opacity var(--showoff-transition-fast);
+  }
+
+  /* Highlighted state */
+  .code-line.highlighted {
+    background-color: rgba(255, 255, 0, 0.2);
+    border-left: 3px solid var(--showoff-color-primary);
+    padding-left: calc(1rem - 3px);
+  }
+
+  /* Dimmed state (other lines when some are highlighted) */
+  .has-highlight-steps.has-active-highlight .code-line:not(.highlighted) {
+    opacity: 0.4;
+  }
+
+  /* Line number highlighting (matches code) */
+  .has-active-highlight .line-numbers .line-number {
+    opacity: 0.4;
+    transition: opacity var(--showoff-transition-fast);
+  }
+
+  .line-numbers .line-number.highlighted {
+    opacity: 1;
+    color: var(--showoff-color-primary);
+    font-weight: var(--showoff-font-weight-bold);
+  }
+
+=== JavaScript for Step Progression
+
+  // public/js/code-highlight.js
+
+  (function() {
+    'use strict';
+
+    class CodeHighlighter {
+      constructor() {
+        this.codeBlocks = [];
+        this.init();
+      }
+
+      init() {
+        document.querySelectorAll('.has-highlight-steps').forEach(pre => {
+          const steps = JSON.parse(pre.dataset.highlightSteps);
+          this.codeBlocks.push({
+            element: pre,
+            steps: steps,
+            currentStep: -1,  // -1 = no highlight, 0 = first step
+            totalSteps: steps.length
+          });
+        });
+      }
+
+      // Called by main slide navigation
+      advanceStep(slideElement) {
+        const block = this.getActiveBlock(slideElement);
+        if (!block) return false;
+
+        if (block.currentStep < block.totalSteps - 1) {
+          block.currentStep++;
+          this.applyHighlight(block);
+          return true;  // Consumed the advance
+        }
+
+        return false;  // No more steps, proceed to next slide
+      }
+
+      // Called when navigating backwards
+      previousStep(slideElement) {
+        const block = this.getActiveBlock(slideElement);
+        if (!block) return false;
+
+        if (block.currentStep >= 0) {
+          block.currentStep--;
+          this.applyHighlight(block);
+          return true;
+        }
+
+        return false;
+      }
+
+      resetSlide(slideElement) {
+        const block = this.getActiveBlock(slideElement);
+        if (block) {
+          block.currentStep = -1;
+          this.clearHighlight(block);
+        }
+      }
+
+      getActiveBlock(slideElement) {
+        const pre = slideElement.querySelector('.has-highlight-steps');
+        return this.codeBlocks.find(b => b.element === pre);
+      }
+
+      applyHighlight(block) {
+        const lines = block.element.querySelectorAll('.code-line');
+        const lineNumbers = block.element.previousElementSibling?.querySelectorAll('.line-number');
+
+        // Clear previous highlights
+        lines.forEach(l => l.classList.remove('highlighted'));
+        lineNumbers?.forEach(l => l.classList.remove('highlighted'));
+
+        if (block.currentStep >= 0) {
+          block.element.classList.add('has-active-highlight');
+
+          const highlightLines = block.steps[block.currentStep];
+          highlightLines.forEach(lineNum => {
+            const line = block.element.querySelector(`[data-line="${lineNum}"]`);
+            if (line) line.classList.add('highlighted');
+
+            // Also highlight line number
+            const lineNumEl = lineNumbers?.[lineNum - 1];
+            if (lineNumEl) lineNumEl.classList.add('highlighted');
+          });
+        } else {
+          this.clearHighlight(block);
+        }
+      }
+
+      clearHighlight(block) {
+        block.element.classList.remove('has-active-highlight');
+        block.element.querySelectorAll('.highlighted').forEach(el => {
+          el.classList.remove('highlighted');
+        });
+      }
+    }
+
+    // Export for use by showoff.js
+    window.codeHighlighter = new CodeHighlighter();
+
+    // Integration with slide navigation
+    // In showoff.js, before advancing slide:
+    //   if (window.codeHighlighter.advanceStep(currentSlide)) return;
+
+  })();
+
+== Technical Design: Magic Move
+
+=== Concept
+
+When two adjacent slides both contain code blocks with the same +magic+ identifier,
+animate the transition between them.
+
+=== Markdown Syntax
+
+  <!SLIDE>
+  ```ruby {magic=refactor-example}
+  def process(data)
+    result = data.map { |x| x * 2 }
+    result.select { |x| x > 10 }
+  end
+  ```
+
+  <!SLIDE>
+  ```ruby {magic=refactor-example}
+  def process(data)
+    data
+      .map { |x| x * 2 }
+      .select { |x| x > 10 }
+  end
+  ```
+
+The +magic=refactor-example+ identifier links the two code blocks. During
+transition, lines animate from position in slide 1 to position in slide 2.
+
+=== Diff Algorithm
+
+Use a line-based diff (similar to git diff):
+
+  # lib/showoff/compiler/magic_move.rb
+
+  require 'diff/lcs'
+
+  module Showoff
+    module Compiler
+      class MagicMove
+        def self.compute_diff(before_lines, after_lines)
+          diffs = Diff::LCS.sdiff(before_lines, after_lines)
+
+          operations = diffs.map.with_index do |change, idx|
+            case change.action
+            when '='
+              { type: :unchanged, before_line: change.old_position, after_line: change.new_position, content: change.old_element }
+            when '-'
+              { type: :removed, before_line: change.old_position, content: change.old_element }
+            when '+'
+              { type: :added, after_line: change.new_position, content: change.new_element }
+            when '!'
+              { type: :changed, before_line: change.old_position, after_line: change.new_position, before_content: change.old_element, after_content: change.new_element }
+            end
+          end
+
+          operations
+        end
+      end
+    end
+  end
+
+=== Animation CSS
+
+  /* public/css/magic-move.css */
+
+  .magic-move-container {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .magic-move-line {
+    position: absolute;
+    left: 0;
+    right: 0;
+    white-space: pre;
+    transition:
+      transform 0.5s cubic-bezier(0.4, 0, 0.2, 1),
+      opacity 0.5s ease;
+  }
+
+  /* Line states during animation */
+  .magic-move-line.moving {
+    /* Transform applied via JS */
+  }
+
+  .magic-move-line.entering {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+
+  .magic-move-line.entering.animate {
+    opacity: 1;
+    transform: translateX(0);
+  }
+
+  .magic-move-line.exiting {
+    opacity: 1;
+  }
+
+  .magic-move-line.exiting.animate {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+
+  .magic-move-line.changed .removed-text {
+    text-decoration: line-through;
+    opacity: 0.5;
+  }
+
+  .magic-move-line.changed .added-text {
+    background: rgba(0, 255, 0, 0.1);
+  }
+
+=== JavaScript Animation Controller
+
+  // public/js/magic-move.js
+
+  class MagicMoveController {
+    constructor() {
+      this.magicBlocks = new Map();  // magic-id -> [slide1Block, slide2Block]
+      this.scanBlocks();
+    }
+
+    scanBlocks() {
+      document.querySelectorAll('[data-magic]').forEach(block => {
+        const magicId = block.dataset.magic;
+        if (!this.magicBlocks.has(magicId)) {
+          this.magicBlocks.set(magicId, []);
+        }
+        this.magicBlocks.get(magicId).push(block);
+      });
+    }
+
+    // Called during slide transition
+    async animate(fromSlide, toSlide) {
+      const fromBlock = fromSlide.querySelector('[data-magic]');
+      const toBlock = toSlide.querySelector('[data-magic]');
+
+      if (!fromBlock || !toBlock) return;
+      if (fromBlock.dataset.magic !== toBlock.dataset.magic) return;
+
+      const diff = JSON.parse(toBlock.dataset.magicDiff || '[]');
+      if (diff.length === 0) return;
+
+      // Create animation container
+      const container = this.createAnimationContainer(fromBlock, toBlock);
+      document.body.appendChild(container);
+
+      // Position lines at "before" positions
+      const lines = this.createAnimatedLines(diff, fromBlock);
+      lines.forEach(line => container.appendChild(line));
+
+      // Force reflow
+      container.offsetHeight;
+
+      // Animate to "after" positions
+      await this.animateLines(lines, diff);
+
+      // Clean up
+      container.remove();
+    }
+
+    createAnimatedLines(diff, referenceBlock) {
+      const lineHeight = this.getLineHeight(referenceBlock);
+
+      return diff.map((op, idx) => {
+        const line = document.createElement('div');
+        line.className = 'magic-move-line';
+        line.textContent = op.content || op.before_content || op.after_content;
+
+        switch (op.type) {
+          case 'unchanged':
+            line.style.transform = `translateY(${op.before_line * lineHeight}px)`;
+            line.dataset.targetY = op.after_line * lineHeight;
+            break;
+
+          case 'removed':
+            line.classList.add('exiting');
+            line.style.transform = `translateY(${op.before_line * lineHeight}px)`;
+            break;
+
+          case 'added':
+            line.classList.add('entering');
+            line.style.transform = `translateY(${op.after_line * lineHeight}px)`;
+            break;
+
+          case 'changed':
+            line.style.transform = `translateY(${op.before_line * lineHeight}px)`;
+            line.dataset.targetY = op.after_line * lineHeight;
+            line.classList.add('changed');
+            break;
+        }
+
+        return line;
+      });
+    }
+
+    async animateLines(lines, diff) {
+      return new Promise(resolve => {
+        requestAnimationFrame(() => {
+          lines.forEach((line, idx) => {
+            const op = diff[idx];
+
+            if (op.type === 'unchanged' || op.type === 'changed') {
+              line.style.transform = `translateY(${line.dataset.targetY}px)`;
+              line.classList.add('moving');
+            } else if (op.type === 'added') {
+              line.classList.add('animate');
+            } else if (op.type === 'removed') {
+              line.classList.add('animate');
+            }
+          });
+
+          // Wait for animation to complete
+          setTimeout(resolve, 500);
+        });
+      });
+    }
+
+    getLineHeight(block) {
+      const style = window.getComputedStyle(block);
+      return parseFloat(style.lineHeight) || 20;
+    }
+
+    createAnimationContainer(fromBlock, toBlock) {
+      const rect = fromBlock.getBoundingClientRect();
+      const container = document.createElement('div');
+      container.className = 'magic-move-container';
+      container.style.cssText = `
+        position: fixed;
+        top: ${rect.top}px;
+        left: ${rect.left}px;
+        width: ${rect.width}px;
+        height: ${Math.max(fromBlock.scrollHeight, toBlock.scrollHeight)}px;
+        z-index: 10000;
+        background: var(--showoff-color-code-background);
+        font-family: var(--showoff-font-family-code);
+      `;
+      return container;
+    }
+  }
+
+  window.magicMoveController = new MagicMoveController();
+
+== Configuration
+
+  # showoff.json
+  {
+    "code_animation": {
+      "enabled": true,
+      "highlight_transition_ms": 150,
+      "magic_move_duration_ms": 500,
+      "dim_unhighlighted": true,
+      "show_line_numbers": true
+    }
+  }
+
+== Implementation Plan
+
+=== Phase 1: Step-by-Step Highlighting (4 hours)
+
+1. Implement markdown syntax parsing in compiler
+2. Create line-wrapping and data attribute injection
+3. Build JavaScript step controller
+4. Integrate with slide navigation
+5. Add CSS for highlight states
+
+=== Phase 2: Line Numbers (2 hours)
+
+1. Implement line number generation
+2. Add startLine offset support
+3. Synchronize line number highlighting
+4. Handle long line numbers (1000+)
+
+=== Phase 3: Magic Move Core (4 hours)
+
+1. Implement magic identifier parsing
+2. Add diff-lcs gem dependency
+3. Compute and embed diff data
+4. Create animation container system
+
+=== Phase 4: Magic Move Animation (3 hours)
+
+1. Implement line position animation
+2. Add enter/exit animations
+3. Handle edge cases (empty blocks, single line)
+4. Performance optimization
+
+=== Phase 5: Testing (2 hours)
+
+1. Unit tests for syntax parsing
+2. Unit tests for diff computation
+3. Visual testing across browsers
+4. Performance testing (large code blocks)
+
+=== Phase 6: Documentation (1 hour)
+
+1. Add syntax examples to AUTHORING.rdoc
+2. Document configuration options
+3. Add troubleshooting guide
+
+== Dependencies
+
+=== New Gems
+
+  # Gemfile
+  gem 'diff-lcs', '~> 1.5'  # For Magic Move diff computation
+
++diff-lcs+ is a well-established diff library (part of RSpec ecosystem).
+
+== Browser Compatibility
+
+* CSS transitions: All modern browsers
+* CSS transforms: All modern browsers
+* requestAnimationFrame: All modern browsers
+* Minimum: Chrome 60+, Firefox 55+, Safari 11+, Edge 79+
+
+== Performance Considerations
+
+=== Large Code Blocks
+
+For code blocks with 100+ lines:
+* Limit animation to visible viewport
+* Use CSS +will-change+ for GPU acceleration
+* Consider virtualization for extremely large blocks
+
+=== Memory
+
+Each animated line creates a DOM element. Clean up animation containers
+immediately after transition completes.
+
+== Success Metrics
+
+* Step progression feels instantaneous (<100ms highlight change)
+* Magic Move animation is smooth (60fps)
+* No layout shift during animations
+* Works correctly with all highlight.js themes
+
+== Open Questions
+
+1. *Should Magic Move work across non-adjacent slides?*
+   Recommendation: No, too complex. Adjacent slides only.
+
+2. *Support for multiple code blocks per slide?*
+   Recommendation: Yes, each with independent step counters.
+
+3. *Keyboard shortcut to skip all steps?*
+   Recommendation: Yes, Shift+Right skips to end of code animation.
+
+4. *Should we support token-level (not just line-level) animation?*
+   Recommendation: Not in v1. Line-level covers 90% of use cases.
+
+== References
+
+* Reveal.js Code Highlighting: https://revealjs.com/code/
+* Slidev Shiki Magic Move: https://sli.dev/features/shiki-magic-move
+* diff-lcs gem: https://github.com/halostatue/diff-lcs
+* CSS Transitions: https://developer.mozilla.org/en-US/docs/Web/CSS/CSS_Transitions
+* FLIP Animation Technique: https://aerotwist.com/blog/flip-your-animations/

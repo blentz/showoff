@@ -1,0 +1,601 @@
+= Feature Specification: Scroll View / Mobile Mode
+
+*Status:* Proposed
+*Priority:* Medium
+*Complexity:* 6/10
+*Utility:* 7/10
+*Eye Candy:* 5/10
+
+== Overview
+
+Render the presentation as a continuous scrollable document instead of paginated
+slides. Each slide becomes a section with optional scroll-snap behavior. This
+enables comfortable viewing on mobile devices and provides a reading-mode for
+post-presentation consumption.
+
+== Problem Statement
+
+Current mobile experience:
+* Fixed 1024x768 slides scaled to fit viewport
+* Tiny text requires pinch-to-zoom
+* Horizontal navigation is awkward on touch devices
+* No way to quickly scan/search presentation content
+* Sharing links requires recipients to click through slides
+
+Reveal.js 5.0 introduced "Scroll View" as the new standard, recognizing that:
+* Many presentations are shared asynchronously (not live)
+* Mobile traffic often exceeds desktop
+* Users expect document-like scrolling for reading
+
+== Goals
+
+* Render all slides as continuous scrollable content
+* Responsive text sizing (readable without zoom)
+* Native scroll behavior (momentum, rubber-banding)
+* Optional scroll-snap for slide-by-slide feel
+* URL anchors for each slide (shareable deep links)
+* Progress indicator showing position in presentation
+* Toggle between scroll and slide mode
+
+== Non-Goals
+
+* Full mobile presenter mode (complex, separate effort)
+* Touch gestures for slide navigation (conflicts with scroll)
+* Offline/PWA support (separate feature)
+
+== User Stories
+
+=== US-1: Mobile viewer scrolls presentation
+
+  GIVEN I open a presentation link on my phone
+  WHEN I access /scroll or viewport is < 768px
+  THEN the presentation renders as scrollable document
+  AND text is readable without zooming
+  AND I can scroll naturally with my thumb
+
+=== US-2: Reader shares specific slide
+
+  GIVEN I am viewing presentation in scroll mode
+  WHEN I scroll to slide 5
+  THEN the URL updates to /scroll#slide-5
+  AND I can share this URL
+  AND recipients land directly on slide 5
+
+=== US-3: Viewer toggles between modes
+
+  GIVEN I am viewing presentation in scroll mode
+  WHEN I click the "Slides" toggle button
+  THEN the view switches to paginated slide mode
+  AND my current position is preserved
+
+=== US-4: Presenter shares post-event link
+
+  GIVEN I have finished presenting
+  WHEN I share the scroll view URL
+  THEN viewers can read at their own pace
+  AND they don't need to click through 50 slides
+
+== Technical Design
+
+=== Route Structure
+
+  GET /                   # Default view (slides or scroll based on device)
+  GET /slides             # Force paginated slide view
+  GET /scroll             # Force scroll view
+  GET /scroll#slide-{n}   # Deep link to specific slide
+
+=== Server Implementation
+
+  # lib/showoff/server.rb
+
+  get '/scroll' do
+    @slides = @presentation.slides
+    @format = :scroll
+    erb :scroll, layout: :layout_scroll
+  end
+
+  # Auto-detect based on viewport (via cookie or query param)
+  get '/' do
+    if mobile_request? && !params[:force_slides]
+      redirect '/scroll'
+    else
+      # existing slide view logic
+    end
+  end
+
+  helpers do
+    def mobile_request?
+      # Check User-Agent for mobile patterns
+      request.user_agent =~ /Mobile|Android|iPhone|iPad/i
+    end
+  end
+
+=== View Template
+
+  <!-- views/scroll.erb -->
+  <!DOCTYPE html>
+  <html lang="<%= I18n.locale %>">
+  <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title><%= Showoff::Config.get('name') %> - Scroll View</title>
+    <link rel="stylesheet" href="/css/scroll.css">
+  </head>
+  <body class="scroll-view" data-theme="<%= @theme %>">
+
+    <!-- Progress indicator -->
+    <div class="scroll-progress">
+      <div class="scroll-progress-bar"></div>
+    </div>
+
+    <!-- Mode toggle -->
+    <nav class="scroll-nav">
+      <a href="/slides" class="mode-toggle" title="Switch to Slide View">
+        <span class="icon">&#9638;</span> Slides
+      </a>
+      <span class="slide-counter">
+        <span class="current">1</span> / <span class="total"><%= @slides.length %></span>
+      </span>
+    </nav>
+
+    <!-- Slides as sections -->
+    <main class="scroll-container">
+      <% @slides.each_with_index do |slide, index| %>
+        <section
+          class="scroll-slide <%= slide.classes.join(' ') %>"
+          id="slide-<%= index + 1 %>"
+          data-slide-number="<%= index + 1 %>"
+        >
+          <div class="slide-content">
+            <%= slide.render %>
+          </div>
+
+          <% if slide.notes? %>
+            <aside class="scroll-notes">
+              <details>
+                <summary>Speaker Notes</summary>
+                <%= slide.notes %>
+              </details>
+            </aside>
+          <% end %>
+        </section>
+      <% end %>
+    </main>
+
+    <script src="/js/scroll.js"></script>
+  </body>
+  </html>
+
+=== Scroll-Specific Stylesheet
+
+  /* public/css/scroll.css */
+
+  /* ============================================
+     SCROLL VIEW LAYOUT
+     ============================================ */
+
+  .scroll-view {
+    --scroll-max-width: 800px;
+    --scroll-padding: 1.5rem;
+
+    background: var(--showoff-color-background);
+    color: var(--showoff-color-text-primary);
+    font-family: var(--showoff-font-family-base);
+    line-height: var(--showoff-line-height-relaxed);
+  }
+
+  .scroll-container {
+    max-width: var(--scroll-max-width);
+    margin: 0 auto;
+    padding: 0 var(--scroll-padding);
+  }
+
+  /* ============================================
+     INDIVIDUAL SLIDES
+     ============================================ */
+
+  .scroll-slide {
+    min-height: 60vh;
+    padding: 3rem 0;
+    border-bottom: 1px solid var(--showoff-color-border);
+    scroll-snap-align: start;
+  }
+
+  .scroll-slide:last-child {
+    border-bottom: none;
+    min-height: 80vh;  /* Extra space at end */
+  }
+
+  /* Headings scale responsively */
+  .scroll-slide h1 {
+    font-size: clamp(1.75rem, 5vw, 3rem);
+    line-height: var(--showoff-line-height-tight);
+    margin-bottom: 1.5rem;
+  }
+
+  .scroll-slide h2 {
+    font-size: clamp(1.5rem, 4vw, 2.25rem);
+  }
+
+  /* Body text */
+  .scroll-slide p,
+  .scroll-slide li {
+    font-size: clamp(1rem, 2.5vw, 1.25rem);
+    margin-bottom: 1rem;
+  }
+
+  /* Code blocks */
+  .scroll-slide pre {
+    overflow-x: auto;
+    font-size: clamp(0.75rem, 2vw, 0.9rem);
+    padding: 1rem;
+    border-radius: var(--showoff-border-radius-md);
+    background: var(--showoff-color-code-background);
+  }
+
+  /* Images scale to container */
+  .scroll-slide img {
+    max-width: 100%;
+    height: auto;
+    display: block;
+    margin: 1.5rem auto;
+  }
+
+  /* ============================================
+     SCROLL SNAP (Optional)
+     ============================================ */
+
+  .scroll-view.snap-enabled {
+    scroll-snap-type: y proximity;
+    overflow-y: scroll;
+    height: 100vh;
+  }
+
+  /* ============================================
+     PROGRESS INDICATOR
+     ============================================ */
+
+  .scroll-progress {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 3px;
+    background: var(--showoff-color-surface);
+    z-index: var(--showoff-z-sticky);
+  }
+
+  .scroll-progress-bar {
+    height: 100%;
+    width: 0%;
+    background: var(--showoff-color-primary);
+    transition: width 100ms ease-out;
+  }
+
+  /* ============================================
+     NAVIGATION
+     ============================================ */
+
+  .scroll-nav {
+    position: fixed;
+    bottom: 1rem;
+    right: 1rem;
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+    padding: 0.5rem 1rem;
+    background: var(--showoff-color-surface);
+    border-radius: var(--showoff-border-radius-lg);
+    box-shadow: var(--showoff-shadow-md);
+    z-index: var(--showoff-z-sticky);
+  }
+
+  .mode-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--showoff-color-text-secondary);
+    text-decoration: none;
+    font-size: 0.875rem;
+  }
+
+  .mode-toggle:hover {
+    color: var(--showoff-color-primary);
+  }
+
+  .slide-counter {
+    font-size: 0.875rem;
+    color: var(--showoff-color-text-muted);
+  }
+
+  /* ============================================
+     SPEAKER NOTES
+     ============================================ */
+
+  .scroll-notes {
+    margin-top: 2rem;
+    padding: 1rem;
+    background: var(--showoff-color-surface);
+    border-radius: var(--showoff-border-radius-md);
+    font-size: 0.9rem;
+  }
+
+  .scroll-notes summary {
+    cursor: pointer;
+    font-weight: var(--showoff-font-weight-medium);
+    color: var(--showoff-color-text-secondary);
+  }
+
+  /* ============================================
+     RESPONSIVE ADJUSTMENTS
+     ============================================ */
+
+  @media (max-width: 480px) {
+    .scroll-slide {
+      padding: 2rem 0;
+    }
+
+    .scroll-nav {
+      bottom: 0;
+      right: 0;
+      left: 0;
+      border-radius: 0;
+      justify-content: center;
+    }
+  }
+
+  /* ============================================
+     PRINT STYLES
+     ============================================ */
+
+  @media print {
+    .scroll-progress,
+    .scroll-nav {
+      display: none;
+    }
+
+    .scroll-slide {
+      page-break-inside: avoid;
+      border-bottom: none;
+    }
+  }
+
+=== JavaScript for Scroll Behavior
+
+  // public/js/scroll.js
+
+  (function() {
+    'use strict';
+
+    const slides = document.querySelectorAll('.scroll-slide');
+    const progressBar = document.querySelector('.scroll-progress-bar');
+    const currentCounter = document.querySelector('.slide-counter .current');
+    const totalCounter = document.querySelector('.slide-counter .total');
+
+    // Update progress bar on scroll
+    function updateProgress() {
+      const scrollTop = window.scrollY;
+      const docHeight = document.body.scrollHeight - window.innerHeight;
+      const progress = (scrollTop / docHeight) * 100;
+      progressBar.style.width = progress + '%';
+    }
+
+    // Update current slide indicator
+    function updateCurrentSlide() {
+      const viewportMiddle = window.innerHeight / 2;
+
+      for (let i = slides.length - 1; i >= 0; i--) {
+        const rect = slides[i].getBoundingClientRect();
+        if (rect.top <= viewportMiddle) {
+          const slideNum = slides[i].dataset.slideNumber;
+          currentCounter.textContent = slideNum;
+
+          // Update URL hash without scrolling
+          const newHash = '#slide-' + slideNum;
+          if (window.location.hash !== newHash) {
+            history.replaceState(null, null, newHash);
+          }
+          break;
+        }
+      }
+    }
+
+    // Throttled scroll handler
+    let ticking = false;
+    function onScroll() {
+      if (!ticking) {
+        requestAnimationFrame(() => {
+          updateProgress();
+          updateCurrentSlide();
+          ticking = false;
+        });
+        ticking = true;
+      }
+    }
+
+    // Initialize
+    function init() {
+      totalCounter.textContent = slides.length;
+
+      window.addEventListener('scroll', onScroll, { passive: true });
+
+      // Handle initial hash
+      if (window.location.hash) {
+        const target = document.querySelector(window.location.hash);
+        if (target) {
+          setTimeout(() => target.scrollIntoView(), 100);
+        }
+      }
+
+      // Initial update
+      updateProgress();
+      updateCurrentSlide();
+    }
+
+    // Keyboard navigation
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') {
+        // Toggle snap mode
+        document.body.classList.toggle('snap-enabled');
+      }
+    });
+
+    init();
+  })();
+
+== Configuration
+
+  # showoff.json
+  {
+    "scroll_view": {
+      "enabled": true,           // Enable scroll view route
+      "auto_redirect": true,     // Auto-redirect mobile to scroll
+      "snap": false,             // Enable scroll-snap
+      "show_notes": true,        // Show speaker notes in scroll view
+      "max_width": "800px"       // Content max-width
+    }
+  }
+
+== Content Adaptations
+
+Some slide classes need special handling in scroll view:
+
+=== Incremental Content
+
+In slide mode, +.incremental+ items appear one at a time. In scroll mode,
+all items are visible (since there's no "next" action).
+
+  /* Show all incremental items in scroll view */
+  .scroll-view .incremental > * {
+    opacity: 1 !important;
+    visibility: visible !important;
+  }
+
+=== Full-Screen Slides
+
+Slides with +.cover+ or +.full-page+ class should still fill viewport:
+
+  .scroll-view .scroll-slide.cover,
+  .scroll-view .scroll-slide.full-page {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+=== Code Execution
+
+Disable code execution in scroll view (security, UX):
+
+  .scroll-view .execute-button {
+    display: none;
+  }
+
+== Implementation Plan
+
+=== Phase 1: Route and Basic Template (3 hours)
+
+1. Add +/scroll+ route to server
+2. Create +scroll.erb+ template
+3. Create basic +scroll.css+ with responsive typography
+
+=== Phase 2: Progress and Navigation (2 hours)
+
+1. Implement scroll progress bar
+2. Add current slide indicator
+3. Add mode toggle button
+4. Implement URL hash updates
+
+=== Phase 3: Content Adaptation (2 hours)
+
+1. Handle incremental content
+2. Handle full-screen slides
+3. Handle speaker notes display
+4. Disable interactive features (code execution)
+
+=== Phase 4: Mobile Auto-Detection (1 hour)
+
+1. Implement User-Agent detection
+2. Add auto-redirect logic
+3. Add +?force_slides+ override
+
+=== Phase 5: Polish (2 hours)
+
+1. Scroll-snap option
+2. Keyboard shortcuts
+3. Print styles
+4. Performance optimization (lazy loading)
+
+=== Phase 6: Testing (2 hours)
+
+1. Test on iOS Safari, Android Chrome
+2. Test with various presentation lengths
+3. Test deep linking
+4. Performance testing (100+ slides)
+
+== Mobile Testing Matrix
+
+| Device | Browser | Status |
+|--------|---------|--------|
+| iPhone 14 | Safari | Required |
+| iPhone 14 | Chrome | Required |
+| Pixel 7 | Chrome | Required |
+| iPad | Safari | Required |
+| Samsung Galaxy | Chrome | Nice to have |
+
+== Performance Considerations
+
+=== Lazy Loading Images
+
+  <img
+    src="placeholder.svg"
+    data-src="actual-image.png"
+    loading="lazy"
+    class="lazy-image"
+  >
+
+=== Intersection Observer for Slides
+
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        // Track view, load images, etc.
+      }
+    });
+  }, { threshold: 0.5 });
+
+  slides.forEach(slide => observer.observe(slide));
+
+=== Virtual Scrolling (Future)
+
+For presentations with 100+ slides, consider virtual scrolling to render
+only visible slides. Not required for MVP.
+
+== Success Metrics
+
+* Scroll view loads in <2 seconds on 3G connection
+* All text readable at default zoom on iPhone SE (smallest common viewport)
+* Progress indicator updates at 60fps during scroll
+* Deep links work correctly 100% of the time
+* Mode toggle preserves position within 1 slide accuracy
+
+== Open Questions
+
+1. *Should scroll view be the default?*
+   Recommendation: No, preserve existing behavior. Auto-redirect mobile only.
+
+2. *Should we support horizontal scroll for wide content?*
+   Recommendation: Yes, code blocks should scroll horizontally.
+
+3. *How to handle presenter-only content?*
+   Recommendation: Hide +~~~SECTION:notes~~~+ by default, show in collapsible.
+
+4. *Should scroll view work offline?*
+   Recommendation: Not in v1. PWA support is separate feature.
+
+== References
+
+* Reveal.js Scroll View: https://revealjs.com/scroll-view/
+* CSS Scroll Snap: https://developer.mozilla.org/en-US/docs/Web/CSS/CSS_Scroll_Snap
+* Intersection Observer: https://developer.mozilla.org/en-US/docs/Web/API/Intersection_Observer_API
+* Mobile viewport: https://developer.mozilla.org/en-US/docs/Web/HTML/Viewport_meta_tag
+* clamp() for responsive typography: https://developer.mozilla.org/en-US/docs/Web/CSS/clamp

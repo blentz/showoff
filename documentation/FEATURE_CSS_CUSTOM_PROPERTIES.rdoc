@@ -1,0 +1,475 @@
+= Feature Specification: CSS Custom Properties (Theming System)
+
+*Status:* Proposed
+*Priority:* Medium-High
+*Complexity:* 4/10
+*Utility:* 7/10
+*Eye Candy:* 6/10
+
+== Overview
+
+Refactor the CSS architecture to use CSS Custom Properties (CSS Variables),
+enabling easy theme customization without forking stylesheets. Users can
+override a small set of variables to completely transform the presentation
+appearance.
+
+== Problem Statement
+
+Current theming requires:
+
+1. Copy entire +showoff.css+ (1500+ lines)
+2. Find and replace hardcoded color values throughout
+3. Maintain forked copy as upstream changes
+4. Repeat for every presentation with custom branding
+
+This creates:
+* Maintenance burden (forked CSS diverges from upstream)
+* Barrier to customization (users must understand full CSS)
+* Inconsistent theming (easy to miss some values)
+* No runtime theme switching (dark mode, etc.)
+
+Competitors (Reveal.js, Slidev, Marp) provide variable-based theming as standard.
+
+== Goals
+
+* Define semantic CSS variables for all customizable properties
+* Enable theming via single variables file
+* Support runtime theme switching (light/dark mode)
+* Maintain backwards compatibility with existing custom CSS
+* Provide 3-5 pre-built themes as examples
+
+== Non-Goals
+
+* Full CSS-in-JS rewrite
+* Sass/Less preprocessing (keep vanilla CSS)
+* Breaking existing custom stylesheets
+
+== Design Principles
+
+=== Variable Naming Convention
+
+Follow established patterns from design systems:
+
+  --showoff-{category}-{property}[-{variant}]
+
+Categories:
+* +color+ - Colors and backgrounds
+* +font+ - Typography
+* +spacing+ - Margins, padding, gaps
+* +size+ - Widths, heights
+* +border+ - Borders and outlines
+* +shadow+ - Box shadows
+* +transition+ - Animation timing
+
+Examples:
+  --showoff-color-background
+  --showoff-color-text-primary
+  --showoff-font-family-heading
+  --showoff-spacing-slide-padding
+  --showoff-size-code-font
+
+== Technical Design
+
+=== Core Variables Definition
+
+  /* public/css/variables.css */
+
+  :root {
+    /* ============================================
+       COLOR PALETTE
+       ============================================ */
+
+    /* Primary colors */
+    --showoff-color-primary: #546E7A;
+    --showoff-color-primary-light: #819CA9;
+    --showoff-color-primary-dark: #29434E;
+
+    /* Semantic colors */
+    --showoff-color-background: #FFFFFF;
+    --showoff-color-surface: #F5F5F5;
+    --showoff-color-text-primary: #333333;
+    --showoff-color-text-secondary: #666666;
+    --showoff-color-text-muted: #999999;
+    --showoff-color-text-inverse: #FFFFFF;
+
+    /* Accent colors */
+    --showoff-color-accent: #2196F3;
+    --showoff-color-success: #4CAF50;
+    --showoff-color-warning: #FF9800;
+    --showoff-color-error: #F44336;
+    --showoff-color-info: #00BCD4;
+
+    /* Code highlighting */
+    --showoff-color-code-background: #F8F8F8;
+    --showoff-color-code-text: #333333;
+    --showoff-color-code-comment: #999988;
+    --showoff-color-code-keyword: #990073;
+    --showoff-color-code-string: #DD1144;
+    --showoff-color-code-number: #009999;
+
+    /* ============================================
+       TYPOGRAPHY
+       ============================================ */
+
+    /* Font families */
+    --showoff-font-family-base: 'Lucida Sans Unicode', 'Lucida Grande', sans-serif;
+    --showoff-font-family-heading: var(--showoff-font-family-base);
+    --showoff-font-family-code: 'Fira Code', 'Monaco', 'Consolas', monospace;
+
+    /* Font sizes (relative to slide scale) */
+    --showoff-font-size-base: 1rem;
+    --showoff-font-size-xs: 0.75rem;
+    --showoff-font-size-sm: 0.875rem;
+    --showoff-font-size-lg: 1.25rem;
+    --showoff-font-size-xl: 1.5rem;
+    --showoff-font-size-2xl: 2rem;
+    --showoff-font-size-3xl: 3rem;
+    --showoff-font-size-4xl: 4rem;
+
+    /* Font weights */
+    --showoff-font-weight-normal: 400;
+    --showoff-font-weight-medium: 500;
+    --showoff-font-weight-bold: 700;
+
+    /* Line heights */
+    --showoff-line-height-tight: 1.25;
+    --showoff-line-height-normal: 1.5;
+    --showoff-line-height-relaxed: 1.75;
+
+    /* ============================================
+       SPACING
+       ============================================ */
+
+    --showoff-spacing-xs: 0.25rem;
+    --showoff-spacing-sm: 0.5rem;
+    --showoff-spacing-md: 1rem;
+    --showoff-spacing-lg: 1.5rem;
+    --showoff-spacing-xl: 2rem;
+    --showoff-spacing-2xl: 3rem;
+
+    /* Slide-specific spacing */
+    --showoff-slide-padding: 2rem;
+    --showoff-slide-margin: 0.5rem;
+
+    /* ============================================
+       SLIDE DIMENSIONS
+       ============================================ */
+
+    --showoff-slide-width: 1024px;
+    --showoff-slide-height: 768px;
+    --showoff-slide-aspect-ratio: 4 / 3;
+
+    /* ============================================
+       BORDERS & SHADOWS
+       ============================================ */
+
+    --showoff-border-radius-sm: 0.125rem;
+    --showoff-border-radius-md: 0.25rem;
+    --showoff-border-radius-lg: 0.5rem;
+    --showoff-border-radius-full: 9999px;
+
+    --showoff-border-width: 1px;
+    --showoff-border-color: #E0E0E0;
+
+    --showoff-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+    --showoff-shadow-md: 0 4px 6px rgba(0, 0, 0, 0.1);
+    --showoff-shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.15);
+
+    /* ============================================
+       TRANSITIONS
+       ============================================ */
+
+    --showoff-transition-fast: 150ms ease;
+    --showoff-transition-normal: 300ms ease;
+    --showoff-transition-slow: 500ms ease;
+
+    /* ============================================
+       Z-INDEX SCALE
+       ============================================ */
+
+    --showoff-z-base: 0;
+    --showoff-z-dropdown: 100;
+    --showoff-z-sticky: 200;
+    --showoff-z-overlay: 300;
+    --showoff-z-modal: 400;
+    --showoff-z-popover: 500;
+    --showoff-z-tooltip: 600;
+  }
+
+=== Dark Mode Support
+
+  /* public/css/themes/dark.css */
+
+  :root[data-theme="dark"],
+  .dark-mode {
+    --showoff-color-background: #1E1E1E;
+    --showoff-color-surface: #2D2D2D;
+    --showoff-color-text-primary: #E0E0E0;
+    --showoff-color-text-secondary: #A0A0A0;
+    --showoff-color-text-muted: #707070;
+    --showoff-color-border: #404040;
+
+    --showoff-color-code-background: #2D2D2D;
+    --showoff-color-code-text: #E0E0E0;
+  }
+
+  /* System preference detection */
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --showoff-color-background: #1E1E1E;
+      /* ... dark mode overrides ... */
+    }
+  }
+
+=== Migration: Existing CSS Refactoring
+
+Before:
+  .slide {
+    background: white;
+    color: #333;
+    font-family: 'Lucida Sans Unicode', sans-serif;
+    padding: 2rem;
+  }
+
+  .slide h1 {
+    color: #546E7A;
+    font-size: 3rem;
+  }
+
+  pre {
+    background: #f8f8f8;
+    font-family: Monaco, Consolas, monospace;
+  }
+
+After:
+  .slide {
+    background: var(--showoff-color-background);
+    color: var(--showoff-color-text-primary);
+    font-family: var(--showoff-font-family-base);
+    padding: var(--showoff-slide-padding);
+  }
+
+  .slide h1 {
+    color: var(--showoff-color-primary);
+    font-size: var(--showoff-font-size-3xl);
+  }
+
+  pre {
+    background: var(--showoff-color-code-background);
+    font-family: var(--showoff-font-family-code);
+  }
+
+== Theme File Structure
+
+  public/
+    css/
+      variables.css          # Core variable definitions
+      showoff.css            # Main styles (uses variables)
+      themes/
+        default.css          # Default theme (empty, uses :root)
+        dark.css             # Dark mode theme
+        corporate.css        # Conservative corporate theme
+        vibrant.css          # Colorful, modern theme
+        minimal.css          # Minimal, typography-focused
+
+== User-Facing API
+
+=== Method 1: showoff.json Configuration
+
+  {
+    "theme": "dark",           // Built-in theme name
+    "custom_theme": "mytheme.css"  // Path to custom theme file
+  }
+
+=== Method 2: Custom CSS Override
+
+Users create a file that only overrides needed variables:
+
+  /* custom/branding.css */
+  :root {
+    --showoff-color-primary: #E91E63;        /* Company pink */
+    --showoff-color-primary-light: #F48FB1;
+    --showoff-color-primary-dark: #AD1457;
+
+    --showoff-font-family-base: 'Roboto', sans-serif;
+    --showoff-font-family-heading: 'Roboto Condensed', sans-serif;
+  }
+
+=== Method 3: Runtime Theme Switching
+
+  // JavaScript API
+  showoff.setTheme('dark');
+  showoff.setTheme('light');
+  showoff.toggleTheme();
+
+  // Presenter can switch themes via keyboard
+  // 'T' key cycles through available themes
+
+== Built-in Themes
+
+=== Theme: Default
+
+The current Showoff look - clean, professional, neutral colors.
+
+  :root {
+    --showoff-color-primary: #546E7A;
+    --showoff-color-background: #FFFFFF;
+    /* ... */
+  }
+
+=== Theme: Dark
+
+High-contrast dark theme for low-light environments.
+
+  :root[data-theme="dark"] {
+    --showoff-color-primary: #90CAF9;
+    --showoff-color-background: #121212;
+    --showoff-color-surface: #1E1E1E;
+    /* ... */
+  }
+
+=== Theme: Corporate
+
+Conservative theme for business presentations.
+
+  :root[data-theme="corporate"] {
+    --showoff-color-primary: #1565C0;  /* Corporate blue */
+    --showoff-font-family-base: 'Arial', sans-serif;
+    --showoff-font-family-heading: 'Georgia', serif;
+    /* ... */
+  }
+
+=== Theme: Vibrant
+
+Bold, colorful theme for engaging talks.
+
+  :root[data-theme="vibrant"] {
+    --showoff-color-primary: #FF5722;
+    --showoff-color-accent: #00BCD4;
+    --showoff-color-background: #FAFAFA;
+    /* ... */
+  }
+
+=== Theme: Minimal
+
+Typography-focused, distraction-free.
+
+  :root[data-theme="minimal"] {
+    --showoff-color-primary: #000000;
+    --showoff-color-text-primary: #000000;
+    --showoff-color-background: #FFFFFF;
+    --showoff-font-family-base: 'Georgia', serif;
+    /* Hide decorative elements */
+    --showoff-shadow-sm: none;
+    --showoff-shadow-md: none;
+    --showoff-border-radius-md: 0;
+    /* ... */
+  }
+
+== Implementation Plan
+
+=== Phase 1: Variable Definition (3 hours)
+
+1. Audit existing CSS for all color, font, spacing values
+2. Create +variables.css+ with semantic variable names
+3. Document each variable with comments
+
+=== Phase 2: CSS Refactoring (4 hours)
+
+1. Refactor +showoff.css+ to use variables
+2. Refactor +presenter.css+ to use variables
+3. Test that visual appearance is unchanged
+
+=== Phase 3: Theme Support (2 hours)
+
+1. Implement theme loading in server
+2. Add +data-theme+ attribute handling
+3. Create dark theme as proof of concept
+
+=== Phase 4: User API (1 hour)
+
+1. Add +theme+ option to showoff.json
+2. Add keyboard shortcut for theme cycling (presenter mode)
+3. Add theme toggle to settings
+
+=== Phase 5: Built-in Themes (2 hours)
+
+1. Create corporate theme
+2. Create vibrant theme
+3. Create minimal theme
+
+=== Phase 6: Documentation (1 hour)
+
+1. Document all variables in CONFIGURATION.rdoc
+2. Add theming guide to AUTHORING.rdoc
+3. Provide theme creation tutorial
+
+== Backwards Compatibility
+
+Existing custom CSS will continue to work because:
+
+1. Variables provide fallback values (CSS spec behavior)
+2. Specific selectors still override variables
+3. No existing class names or structure changes
+
+User's existing +custom.css+:
+  .slide { background: blue; }  /* Still works, overrides variable */
+
+== Testing Strategy
+
+=== Visual Regression Testing
+
+Use Percy or similar to capture screenshots with each theme and compare.
+
+=== Unit Tests
+
+  # spec/unit/showoff/theme_spec.rb
+  describe Showoff::Theme do
+    it 'loads built-in theme' do
+      theme = Showoff::Theme.new('dark')
+      expect(theme.css_path).to exist
+    end
+
+    it 'falls back to default for unknown theme' do
+      theme = Showoff::Theme.new('nonexistent')
+      expect(theme.name).to eq('default')
+    end
+  end
+
+=== Manual Testing Checklist
+
+* [ ] All slide types render correctly with default theme
+* [ ] Dark mode has sufficient contrast (WCAG AA)
+* [ ] Code highlighting works in all themes
+* [ ] Presenter view works with all themes
+* [ ] Theme switching doesn't cause layout shift
+* [ ] Print styles still work
+
+== Success Metrics
+
+* Theme customization requires <10 lines of CSS (vs 100+ currently)
+* All built-in themes pass WCAG AA contrast requirements
+* Zero visual regressions in default theme
+* Theme switching occurs in <100ms
+
+== Open Questions
+
+1. *Should we support CSS-in-JSON for themes?*
+   Recommendation: No, keep it pure CSS. Lower barrier, better tooling.
+
+2. *How many built-in themes?*
+   Recommendation: 5 initially (default, dark, corporate, vibrant, minimal).
+
+3. *Should themes be distributable as gems?*
+   Recommendation: Not in v1. File-based themes are simpler.
+
+4. *Support for per-slide theme overrides?*
+   Recommendation: Yes, via slide class. +<!SLIDE dark-mode>+
+
+== References
+
+* CSS Custom Properties: https://developer.mozilla.org/en-US/docs/Web/CSS/Using_CSS_custom_properties
+* Reveal.js themes: https://revealjs.com/themes/
+* Tailwind CSS design tokens: https://tailwindcss.com/docs/customizing-colors
+* Material Design color system: https://material.io/design/color/
+* WCAG contrast requirements: https://www.w3.org/WAI/WCAG21/Understanding/contrast-minimum.html

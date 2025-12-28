@@ -1,0 +1,355 @@
+= Feature Specification: Hot Reload / Live Preview
+
+*Status:* Proposed
+*Priority:* High
+*Complexity:* 3/10
+*Utility:* 9/10
+*Eye Candy:* 2/10
+
+== Overview
+
+Automatically reload the presentation in connected browsers when source files
+change. Eliminates the manual refresh cycle during slide authoring.
+
+== Problem Statement
+
+Current workflow requires manual browser refresh after every file edit:
+
+  1. Edit slides.md
+  2. Save file
+  3. Switch to browser
+  4. Press F5/Cmd+R
+  5. Navigate back to current slide
+  6. Repeat
+
+This friction compounds during active development, wasting significant time
+and breaking creative flow. Every modern presentation tool (Slidev, Marp,
+Reveal.js) provides automatic reload. Showoff's lack of this feature is a
+competitive disadvantage.
+
+== Goals
+
+* Reload browser within 500ms of file save
+* Preserve current slide position after reload
+* Work with all file types (.md, .css, .json, .erb)
+* Zero configuration required (works out of box)
+* Optional: Smart reload (CSS-only changes don't require full reload)
+
+== Non-Goals
+
+* Hot Module Replacement (HMR) like Vite/Webpack (too complex)
+* Incremental compilation (full recompile is fast enough)
+* Editor integration (VS Code extension is separate feature)
+
+== User Stories
+
+=== US-1: Author saves markdown file
+
+  GIVEN I am editing slides.md in my editor
+  AND I have the presentation open in my browser
+  WHEN I save the file
+  THEN the browser reloads automatically
+  AND I remain on the same slide I was viewing
+
+=== US-2: Author modifies CSS
+
+  GIVEN I am editing custom.css
+  WHEN I save the file
+  THEN the browser applies the new styles
+  AND I remain on the same slide without full page reload
+
+=== US-3: Author updates showoff.json
+
+  GIVEN I modify showoff.json (add section, change title)
+  WHEN I save the file
+  THEN the browser performs full reload
+  AND the presentation reflects the new configuration
+
+== Technical Design
+
+=== Option A: WebSocket-based (Recommended)
+
+Leverage existing WebSocket infrastructure in +WebSocketManager+.
+
+==== File Watcher Component
+
+  # lib/showoff/server/file_watcher.rb
+  require 'listen'
+
+  module Showoff
+    class FileWatcher
+      WATCH_PATTERNS = %w[
+        **/*.md
+        **/*.css
+        **/*.json
+        **/*.erb
+        **/*.html
+      ].freeze
+
+      IGNORE_PATTERNS = [
+        /\.git/,
+        /node_modules/,
+        /_files\/.*downloads/,
+        /\.stats\.json$/
+      ].freeze
+
+      def initialize(root_dir, websocket_manager)
+        @root_dir = root_dir
+        @ws_manager = websocket_manager
+        @debounce_timer = nil
+        @debounce_delay = 0.1  # 100ms debounce
+      end
+
+      def start
+        @listener = Listen.to(@root_dir, only: build_regex) do |modified, added, removed|
+          handle_changes(modified + added + removed)
+        end
+        @listener.ignore(IGNORE_PATTERNS)
+        @listener.start
+      end
+
+      def stop
+        @listener&.stop
+      end
+
+      private
+
+      def handle_changes(files)
+        # Debounce rapid changes (editor save + backup)
+        @debounce_timer&.cancel
+        @debounce_timer = Thread.new do
+          sleep @debounce_delay
+          broadcast_reload(files)
+        end
+      end
+
+      def broadcast_reload(files)
+        reload_type = determine_reload_type(files)
+        @ws_manager.broadcast({
+          type: 'reload',
+          reload_type: reload_type,
+          files: files.map { |f| f.sub(@root_dir + '/', '') }
+        })
+      end
+
+      def determine_reload_type(files)
+        if files.all? { |f| f.end_with?('.css') }
+          'css'  # CSS-only hot swap
+        else
+          'full' # Full page reload
+        end
+      end
+
+      def build_regex
+        Regexp.union(WATCH_PATTERNS.map { |p| Regexp.new(p.gsub('**/', '.*').gsub('*', '[^/]*')) })
+      end
+    end
+  end
+
+==== WebSocket Message Handler (Client)
+
+  // public/js/showoff.js - add to existing WebSocket handler
+
+  case 'reload':
+    handleReload(data);
+    break;
+
+  function handleReload(data) {
+    // Store current slide position
+    const currentSlide = slidenum;
+    const currentIncremental = incrementnum;
+
+    if (data.reload_type === 'css') {
+      // Hot swap CSS without full reload
+      reloadStylesheets();
+      console.log('[Hot Reload] CSS updated:', data.files);
+    } else {
+      // Full reload, restore position after
+      sessionStorage.setItem('showoff_reload_position', JSON.stringify({
+        slide: currentSlide,
+        incremental: currentIncremental
+      }));
+      location.reload();
+    }
+  }
+
+  function reloadStylesheets() {
+    document.querySelectorAll('link[rel="stylesheet"]').forEach(link => {
+      const href = link.getAttribute('href');
+      if (href && !href.includes('//')) {  // Only local stylesheets
+        link.setAttribute('href', href.split('?')[0] + '?v=' + Date.now());
+      }
+    });
+  }
+
+  // On page load, restore position if coming from reload
+  document.addEventListener('DOMContentLoaded', function() {
+    const savedPosition = sessionStorage.getItem('showoff_reload_position');
+    if (savedPosition) {
+      sessionStorage.removeItem('showoff_reload_position');
+      const pos = JSON.parse(savedPosition);
+      // Wait for slides to initialize, then navigate
+      setTimeout(() => gotoSlide(pos.slide, pos.incremental), 100);
+    }
+  });
+
+==== Server Integration
+
+  # lib/showoff/server.rb - add to initialize
+
+  def initialize(app = nil, options = {})
+    super()
+    # ... existing initialization ...
+
+    if settings.development? || options[:hot_reload]
+      @file_watcher = FileWatcher.new(
+        options[:pres_dir],
+        @websocket_manager
+      )
+      @file_watcher.start
+    end
+  end
+
+=== Option B: Server-Sent Events (SSE)
+
+Simpler than WebSocket, but requires separate connection.
+
+  # lib/showoff/server.rb
+  get '/livereload' do
+    content_type 'text/event-stream'
+    cache_control :no_cache
+
+    stream(:keep_open) do |out|
+      @file_watcher.on_change do |files|
+        out << "event: reload\n"
+        out << "data: #{files.to_json}\n\n"
+      end
+    end
+  end
+
+  // Client
+  const evtSource = new EventSource('/livereload');
+  evtSource.addEventListener('reload', (e) => {
+    location.reload();
+  });
+
+*Recommendation:* Option A (WebSocket) since infrastructure already exists.
+
+=== Option C: Polling (Fallback)
+
+For environments where WebSocket/SSE are blocked:
+
+  // Client polls /api/version every 2 seconds
+  setInterval(async () => {
+    const res = await fetch('/api/version');
+    const data = await res.json();
+    if (data.version !== currentVersion) {
+      location.reload();
+    }
+  }, 2000);
+
+== Dependencies
+
+=== New Gem
+
+  # Gemfile
+  gem 'listen', '~> 3.8'
+
++listen+ is a well-maintained file system notification library (3.4M downloads,
+used by Rails, Guard, etc). Native filesystem events on macOS/Linux/Windows.
+
+=== Alternatives Considered
+
+[rb-fsevent/rb-inotify]
+  Lower-level than +listen+, platform-specific. More work to support all platforms.
+
+[filewatcher]
+  Less maintained than +listen+, polling-based fallback.
+
+[guard]
+  Overkill - includes full task runner we don't need.
+
+== Configuration
+
+  # showoff.json
+  {
+    "hot_reload": true,           // Enable/disable (default: true in dev)
+    "hot_reload_delay": 100,      // Debounce delay in ms (default: 100)
+    "hot_reload_patterns": [      // Additional patterns to watch
+      "**/*.svg"
+    ]
+  }
+
+  # CLI flag
+  showoff serve --no-hot-reload   # Disable hot reload
+  showoff serve --hot-reload      # Force enable (even in production)
+
+== Implementation Plan
+
+=== Phase 1: Core Infrastructure (2 hours)
+
+1. Add +listen+ gem to Gemfile
+2. Create +FileWatcher+ class with debouncing
+3. Add +reload+ message type to WebSocket protocol
+4. Wire up watcher in +Server#initialize+
+
+=== Phase 2: Client Handler (1 hour)
+
+1. Add reload message handler to showoff.js
+2. Implement CSS hot-swap for .css-only changes
+3. Implement position preservation via sessionStorage
+
+=== Phase 3: Testing (2 hours)
+
+1. Unit tests for FileWatcher (file patterns, debouncing)
+2. Integration test for WebSocket reload message
+3. Manual testing across macOS/Linux/Windows
+
+=== Phase 4: Documentation (30 minutes)
+
+1. Update USAGE.rdoc with hot reload info
+2. Add configuration options to CONFIGURATION.rdoc
+3. Update CHANGELOG
+
+== Risks and Mitigations
+
+[File watcher resource usage]
+  *Risk:* Watching large presentation directories may consume resources.
+  *Mitigation:* Use +.showoffignore+ file (like +.gitignore+) to exclude directories.
+
+[Debounce timing]
+  *Risk:* Too short = multiple reloads; too long = sluggish feel.
+  *Mitigation:* 100ms default with configurable override.
+
+[Network issues]
+  *Risk:* WebSocket disconnect during reload.
+  *Mitigation:* Client auto-reconnects (already implemented in showoff.js).
+
+[Symlink handling]
+  *Risk:* Symlinked directories may not trigger events.
+  *Mitigation:* +listen+ gem handles symlinks; document limitation if issues arise.
+
+== Success Metrics
+
+* Reload occurs within 500ms of file save (measured via console.log timestamps)
+* No manual refresh required during typical 30-minute authoring session
+* Slide position preserved 100% of the time after reload
+* Zero increase in idle CPU usage (native filesystem events, not polling)
+
+== Open Questions
+
+1. *Should hot reload be enabled by default in production?*
+   Recommendation: No, only in development mode. Can force with --hot-reload flag.
+
+2. *Should we support .showoffignore file?*
+   Recommendation: Yes, but in Phase 2. Not critical for MVP.
+
+3. *What about presentations with thousands of files?*
+   Recommendation: Document recommendation to exclude large asset directories.
+
+== References
+
+* Listen gem: https://github.com/guard/listen
+* Reveal.js livereload: https://revealjs.com/development/
+* Slidev hot reload: https://sli.dev/guide/
+* Rails Hotwire: https://hotwired.dev/

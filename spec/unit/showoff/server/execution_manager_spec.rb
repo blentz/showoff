@@ -94,6 +94,16 @@ describe Showoff::Server::ExecutionManager do
           expect(subject.execute('ruby', 'puts "Hello"')).to eq('Execution timed out')
         end
       end
+
+      context 'when other exceptions occur' do
+        before do
+          allow(Timeout).to receive(:timeout).and_raise(StandardError.new('Something went wrong'))
+        end
+
+        it 'returns the error message' do
+          expect(subject.execute('ruby', 'puts "Hello"')).to eq('Something went wrong')
+        end
+      end
     end
   end
 
@@ -101,6 +111,21 @@ describe Showoff::Server::ExecutionManager do
     # This is a simplified test since the actual implementation would require
     # more complex fixtures and markdown processing
     let(:slide_content) { '<div><code class="execute language-ruby">puts "Hello"</code></div>' }
+    let(:multi_code_slide) do
+      '<div>
+        <code class="execute language-ruby">puts "Ruby code"</code>
+        <code class="execute language-python">print("Python code")</code>
+        <code class="execute language-shell">echo "Shell code"</code>
+      </div>'
+    end
+    let(:non_executable_slide) do
+      '<div>
+        <code class="language-ruby">puts "Non-executable Ruby"</code>
+      </div>'
+    end
+    let(:multi_slide_content) do
+      "<!SLIDE\nFirst slide\n<!SLIDE\nSecond slide with code\n<!SLIDE\nThird slide"
+    end
 
     before do
       allow(File).to receive(:exist?).and_return(true)
@@ -122,6 +147,11 @@ describe Showoff::Server::ExecutionManager do
       expect(subject.get_code_from_slide('empty', 0)).to eq([])
     end
 
+    it 'returns an empty array if the slide content is nil' do
+      allow(File).to receive(:read).and_return(nil)
+      expect(subject.get_code_from_slide('nil_content', 0)).to eq([])
+    end
+
     it 'returns an error message if the code block index is invalid' do
       expect(subject.get_code_from_slide('test', 1)).to eq('Invalid code block index')
     end
@@ -130,6 +160,83 @@ describe Showoff::Server::ExecutionManager do
       it 'returns an array of all code blocks with their languages and classes' do
         expect(subject.get_code_from_slide('test', 'all')).to eq([[nil, 'puts "Hello"', ['language-ruby']]])
       end
+
+      it 'returns multiple code blocks with their languages and classes' do
+        allow(subject).to receive(:process_markdown).and_return(multi_code_slide)
+        # After shift, the 'execute' class is consumed, leaving 'language-xxx'
+        # The regex matches on the shifted value ('execute') which doesn't match, so lang=nil
+        expected_result = [
+          [nil, 'puts "Ruby code"', ['language-ruby']],
+          [nil, 'print("Python code")', ['language-python']],
+          [nil, 'echo "Shell code"', ['language-shell']]
+        ]
+        expect(subject.get_code_from_slide('test', 'all')).to eq(expected_result)
+      end
+    end
+
+    context 'when path includes a slide number' do
+      it 'extracts the path and slide number correctly' do
+        allow(File).to receive(:read).and_return(multi_slide_content)
+        allow(subject).to receive(:process_markdown) do |_name, _section, content, _opts|
+          if content.include?('Second slide with code')
+            '<div><code class="execute language-ruby">puts "Slide 2 code"</code></div>'
+          else
+            '<div>No code here</div>'
+          end
+        end
+
+        expect(subject.get_code_from_slide('test:2', 0)).to eq('puts "Slide 2 code"')
+      end
+
+      it 'defaults to slide 1 when no number is specified' do
+        allow(File).to receive(:read).and_return(multi_slide_content)
+        allow(subject).to receive(:process_markdown) do |_name, _section, content, _opts|
+          if content.include?('First slide')
+            '<div><code class="execute language-ruby">puts "Slide 1 code"</code></div>'
+          else
+            '<div>No code here</div>'
+          end
+        end
+
+        expect(subject.get_code_from_slide('test', 0)).to eq('puts "Slide 1 code"')
+      end
+    end
+
+    context 'when executable parameter is false' do
+      it 'searches for all code blocks, not just executable ones' do
+        allow(subject).to receive(:process_markdown).and_return(non_executable_slide)
+
+        # When executable=true (default), it should find no code blocks
+        expect(subject.get_code_from_slide('test', 0, true)).to eq('Invalid code block index')
+
+        # When executable=false, it should find the non-executable code block
+        expect(subject.get_code_from_slide('test', 0, false)).to eq('puts "Non-executable Ruby"')
+      end
+
+      it 'returns all code blocks when index is "all"' do
+        allow(subject).to receive(:process_markdown).and_return(non_executable_slide)
+        # After shift, 'language-ruby' is consumed, lang=ruby, classes=[]
+        expected_result = [['ruby', 'puts "Non-executable Ruby"', []]]
+        expect(subject.get_code_from_slide('test', 'all', false)).to eq(expected_result)
+      end
+    end
+
+    context 'when code blocks have special formatting' do
+      it 'removes leading "* " from code lines' do
+        special_code = '<div><code class="execute language-ruby">* puts "Hello"
+* puts "World"</code></div>'
+        allow(subject).to receive(:process_markdown).and_return(special_code)
+
+        expect(subject.get_code_from_slide('test', 0)).to eq(' puts "Hello"
+ puts "World"')
+      end
+    end
+  end
+
+  describe '#process_markdown' do
+    it 'wraps content in a code block for extraction' do
+      result = subject.send(:process_markdown, 'test.md', 'section', 'puts "Hello"')
+      expect(result).to eq('<div><code class=\'execute language-ruby\'>puts "Hello"</code></div>')
     end
   end
 end

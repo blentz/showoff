@@ -171,6 +171,100 @@ RSpec.describe Showoff::Server::SessionState do
     end
   end
 
+  describe '#generate_guid' do
+    it 'generates a 16-character hexadecimal string' do
+      guid = sessions.generate_guid
+      expect(guid).to match(/^[0-9a-f]{16}$/)
+    end
+
+    it 'generates unique values' do
+      guids = 10.times.map { sessions.generate_guid }
+      expect(guids.uniq.size).to eq(10)
+    end
+  end
+
+  describe '#register_presenter' do
+    it 'sets the presenter cookie if not already set' do
+      expect(sessions.presenter_cookie).to be_nil
+      sessions.register_presenter('client-abc')
+      expect(sessions.presenter_cookie).not_to be_nil
+      expect(sessions.presenter_cookie).to match(/^[0-9a-f]{16}$/)
+    end
+
+    it 'does not change presenter cookie if already set' do
+      sessions.register_presenter('client-abc')
+      original_cookie = sessions.presenter_cookie
+      sessions.register_presenter('client-xyz')
+      expect(sessions.presenter_cookie).to eq(original_cookie)
+    end
+
+    it 'sets the master presenter if not already set' do
+      expect(sessions.master_presenter).to be_nil
+      sessions.register_presenter('client-abc')
+      expect(sessions.master_presenter).to eq('client-abc')
+    end
+
+    it 'does not change master presenter if already set' do
+      sessions.register_presenter('client-abc')
+      sessions.register_presenter('client-xyz')
+      expect(sessions.master_presenter).to eq('client-abc')
+    end
+  end
+
+  describe '#presenter_cookie' do
+    it 'returns nil when no presenter is registered' do
+      expect(sessions.presenter_cookie).to be_nil
+    end
+
+    it 'returns the presenter cookie after registration' do
+      sessions.register_presenter('client-abc')
+      expect(sessions.presenter_cookie).not_to be_nil
+      expect(sessions.presenter_cookie).to match(/^[0-9a-f]{16}$/)
+    end
+  end
+
+  describe '#valid_presenter_cookie?' do
+    it 'returns false for nil cookie' do
+      expect(sessions.valid_presenter_cookie?(nil)).to be false
+    end
+
+    it 'returns false when no presenter is registered' do
+      expect(sessions.valid_presenter_cookie?('some-cookie')).to be false
+    end
+
+    it 'returns false for invalid cookie' do
+      sessions.register_presenter('client-abc')
+      expect(sessions.valid_presenter_cookie?('wrong-cookie')).to be false
+    end
+
+    it 'returns true for valid cookie' do
+      sessions.register_presenter('client-abc')
+      cookie = sessions.presenter_cookie
+      expect(sessions.valid_presenter_cookie?(cookie)).to be true
+    end
+  end
+
+  describe '#master_presenter?' do
+    it 'returns false when no master presenter is set' do
+      expect(sessions.master_presenter?('client-abc')).to be false
+    end
+
+    it 'returns false for non-matching client ID' do
+      sessions.register_presenter('client-abc')
+      expect(sessions.master_presenter?('client-xyz')).to be false
+    end
+
+    it 'returns true for matching client ID' do
+      sessions.register_presenter('client-abc')
+      expect(sessions.master_presenter?('client-abc')).to be true
+    end
+
+    it 'is consistent with is_master_presenter?' do
+      sessions.register_presenter('client-abc')
+      expect(sessions.master_presenter?('client-abc')).to eq(sessions.is_master_presenter?('client-abc'))
+    end
+  end
+
   describe 'thread safety' do
     it 'handles concurrent access safely' do
       threads = []
@@ -210,6 +304,47 @@ RSpec.describe Showoff::Server::SessionState do
 
       # Should have one of the tokens set
       expect(sessions.presenter_token).to match(/^token\d+$/)
+    end
+
+    it 'handles concurrent presenter registration' do
+      threads = []
+
+      10.times do |i|
+        threads << Thread.new do
+          sessions.register_presenter("client-#{i}")
+        end
+      end
+
+      threads.each(&:join)
+
+      # Should have a presenter cookie set
+      expect(sessions.presenter_cookie).not_to be_nil
+
+      # Should have one of the clients as master
+      expect(sessions.master_presenter).to match(/^client-\d+$/)
+    end
+
+    it 'handles concurrent session expiration' do
+      # Create 100 sessions
+      100.times do |i|
+        sessions.set_current_slide("session-#{i}", i)
+      end
+
+      threads = []
+
+      # Spawn 10 threads that each clear 10 sessions
+      10.times do |i|
+        threads << Thread.new do
+          10.times do |j|
+            sessions.clear_session("session-#{i*10 + j}")
+          end
+        end
+      end
+
+      threads.each(&:join)
+
+      # All sessions should be cleared
+      expect(sessions.count).to eq(0)
     end
   end
 end

@@ -84,6 +84,40 @@ RSpec.describe Showoff::Server::FormManager do
     end
   end
 
+  describe '#responses' do
+    it 'returns nil for non-existent forms' do
+      expect(forms.responses('nonexistent')).to be_nil
+    end
+
+    it 'returns nil for empty forms' do
+      forms.submit('empty_form', 's1', {})
+      forms.clear('empty_form')
+      expect(forms.responses('empty_form')).to be_nil
+    end
+
+    it 'organizes responses by client_id' do
+      forms.submit('survey', 'client1', { 'q1' => 'a', 'q2' => 'b' })
+      forms.submit('survey', 'client2', { 'q1' => 'c', 'q2' => 'd' })
+
+      result = forms.responses('survey')
+      expect(result).to be_a(Hash)
+      expect(result.keys).to contain_exactly('client1', 'client2')
+      expect(result['client1']).to eq({ 'q1' => 'a', 'q2' => 'b' })
+      expect(result['client2']).to eq({ 'q1' => 'c', 'q2' => 'd' })
+    end
+
+    it 'keeps only the latest response per client' do
+      # First submission
+      forms.submit('quiz', 'client1', { 'q1' => 'first' })
+
+      # Second submission from same client - should override
+      forms.submit('quiz', 'client1', { 'q1' => 'second' })
+
+      result = forms.responses('quiz')
+      expect(result['client1']).to eq({ 'q1' => 'second' })
+    end
+  end
+
   describe 'validation' do
     it 'rejects nil form_name' do
       expect { forms.submit(nil, 'sess', {}) }.to raise_error(ArgumentError, /form_name/)
@@ -120,6 +154,19 @@ RSpec.describe Showoff::Server::FormManager do
       expect { Time.parse(json['forms']['quiz1'].first['timestamp']) }.not_to raise_error
     end
 
+    it 'exports a specific form when name provided' do
+      forms.submit('quiz1', 's1', { 'q1' => 'A' })
+      forms.submit('quiz2', 's2', { 'q2' => 'B' })
+
+      forms.export_json('quiz1')
+
+      expect(File).to exist(persistence_file)
+
+      json = JSON.parse(File.read(persistence_file))
+      expect(json['forms'].keys).to contain_exactly('quiz1')
+      expect(json['forms']).not_to have_key('quiz2')
+    end
+
     it 'saves via save_to_disk alias' do
       forms.submit('q', 's', { 'a' => 'b' })
       forms.save_to_disk
@@ -135,10 +182,65 @@ RSpec.describe Showoff::Server::FormManager do
     it 'handles corrupt JSON files without raising and warns' do
       File.write(persistence_file, '{not json')
       expect(Kernel).to receive(:warn).with(/Failed to load forms/)
-      
+
       mgr = described_class.new(persistence_file)
       expect(mgr.form_names).to eq([])
       expect(mgr.get_aggregated('quiz1')).to eq({})
+    end
+
+    it 'handles missing keys in JSON data' do
+      # Missing 'forms' key - should just result in empty forms, no warning
+      payload = { exported_at: Time.now.iso8601 }
+      File.write(persistence_file, JSON.generate(payload))
+
+      mgr = described_class.new(persistence_file)
+      expect(mgr.form_names).to eq([])
+    end
+
+    it 'handles malformed timestamps in JSON data' do
+      payload = {
+        forms: {
+          quiz1: [
+            { session_id: 's1', responses: { 'q1' => 'a' }, timestamp: 'not-a-timestamp' }
+          ]
+        },
+        exported_at: Time.now.iso8601
+      }
+      File.write(persistence_file, JSON.generate(payload))
+
+      expect(Kernel).to receive(:warn).with(/Failed to load forms/)
+      mgr = described_class.new(persistence_file)
+      expect(mgr.form_names).to eq([])
+    end
+
+    it 'ignores extra fields in JSON data' do
+      payload = {
+        forms: {
+          quiz1: [
+            {
+              session_id: 's1',
+              responses: { 'q1' => 'a' },
+              timestamp: Time.now.iso8601,
+              extra_field: 'should be ignored'
+            }
+          ]
+        },
+        exported_at: Time.now.iso8601,
+        extra_root_field: 'should be ignored'
+      }
+      File.write(persistence_file, JSON.generate(payload))
+
+      mgr = described_class.new(persistence_file)
+      expect(mgr.form_names).to eq(['quiz1'])
+      expect(mgr.response_count('quiz1')).to eq(1)
+
+      # Verify the response was loaded correctly
+      responses = mgr.get_responses('quiz1')
+      expect(responses.first[:session_id]).to eq('s1')
+      # JSON.parse with symbolize_names converts keys to symbols
+      expect(responses.first[:responses]).to eq({ q1: 'a' })
+      expect(responses.first[:timestamp]).to be_a(Time)
+      expect(responses.first).not_to have_key(:extra_field)
     end
   end
 
@@ -158,6 +260,33 @@ RSpec.describe Showoff::Server::FormManager do
 
       forms.clear
       expect(forms.form_names).to eq([])
+    end
+  end
+
+  describe 'get_aggregated edge cases' do
+    it 'handles complex response data in aggregation' do
+      forms.submit('complex', 's1', {
+        'multi_choice' => ['A', 'B'],
+        'nested' => { 'key' => 'value' },
+        'numeric' => 42,
+        'boolean' => true
+      })
+
+      forms.submit('complex', 's2', {
+        'multi_choice' => ['B', 'C'],
+        'nested' => { 'key' => 'value' },
+        'numeric' => 42,
+        'boolean' => false
+      })
+
+      agg = forms.get_aggregated('complex')
+      expect(agg[:total_responses]).to eq(2)
+
+      # Each answer is counted as a separate entity
+      expect(agg[:questions]['multi_choice']).to include(['A', 'B'] => 1, ['B', 'C'] => 1)
+      expect(agg[:questions]['nested']).to include({ 'key' => 'value' } => 2)
+      expect(agg[:questions]['numeric']).to include(42 => 2)
+      expect(agg[:questions]['boolean']).to include(true => 1, false => 1)
     end
   end
 

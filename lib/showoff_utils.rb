@@ -294,7 +294,7 @@ def self.heroku(name, password = nil, force = false)
   end
 
   TYPES = {
-    :default      => lambda { |t,size,source,type| make_slide(t,"#{size} #{type}",source) },
+    :default      => lambda { |t,size,source| make_slide(t,size,source) },
     'title'       => lambda { |t,size,dontcare|    make_slide(t,size) },
     'bullets'     => lambda { |t,size,dontcare|    make_slide(t,"#{size} bullets incremental",["bullets","go","here"])},
     'smbullets'   => lambda { |t,size,dontcare|    make_slide(t,"#{size} smbullets incremental",["bullets","go","here","and","here"])},

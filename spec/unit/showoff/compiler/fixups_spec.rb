@@ -148,6 +148,32 @@ EOF
     expect(code[2].classes).to eq(['language-ruby', 'goodbye'])
   end
 
+  it "correctly handles Mermaid diagrams with special class" do
+    content = <<-EOF
+<h1>This is a slide with a Mermaid diagram</h1>
+<pre><code>@@@ mermaid
+graph TD;
+    A-->B;
+    A-->C;
+    B-->D;
+    C-->D;
+</code></pre>
+EOF
+    doc = Nokogiri::HTML::DocumentFragment.parse(content)
+
+    # This call mutates the passed in object
+    Showoff::Compiler::Fixups.updateSyntaxHighlighting!(doc)
+    pre = doc.search('pre')
+    code = doc.search('code')
+
+    expect(doc).to be_a(Nokogiri::HTML::DocumentFragment)
+    expect(pre.length).to eq(1)
+    expect(code.length).to eq(1)
+    expect(pre[0].classes).to eq(['highlight'])
+    expect(code[0].classes).to eq(['language-render-diagram'])
+    expect(code[0].text).to include('graph TD;')
+  end
+
   context "image path cleanup" do
     it "cleans up image paths for slide in presentation root" do
       content = <<-EOF
@@ -233,7 +259,52 @@ EOF
     expect(texts[3]).to eq('root')
   end
 
+  it "correctly handles commandline blocks with command and output" do
+    content = <<~EOF
+<div class="commandline">
+<pre><code>$ echo hello
+hello</code></pre>
+</div>
+EOF
+    doc = Nokogiri::HTML::DocumentFragment.parse(content)
+
+    Showoff::Compiler::Fixups.updateCommandlineBlocks!(doc)
+
+    # Collect command and result nodes
+    command_nodes = doc.search('.commandline pre code code.command')
+    result_nodes = doc.search('.commandline pre code code.result')
+
+    # Expect one command and one result
+    expect(command_nodes.length).to eq(1)
+    expect(command_nodes[0].text).to eq('$ echo hello')
+    expect(result_nodes.length).to eq(1)
+    expect(result_nodes[0].text).to eq('hello')
+  end
+
+  it "handles nested elements with class prefixes correctly" do
+    content = <<-EOF
+<h1>This is a complex HTML slide</h1>
+<div>
+  <p>.outer.class This paragraph has nested elements with classes.</p>
+  <p>.comment This should be removed even with <strong>nested elements</strong>.</p>
+  <p>Regular paragraph <strong>with formatting</strong>.</p>
+  <img src="image.jpg" alt=".image.class This image has classes">
+</div>
+EOF
+    doc = Nokogiri::HTML::DocumentFragment.parse(content)
+
+    # This call mutates the passed in object
+    Showoff::Compiler::Fixups.updateClasses!(doc)
+    paragraphs = doc.search('p')
+    images = doc.search('img')
+
+    expect(doc).to be_a(Nokogiri::HTML::DocumentFragment)
+    expect(paragraphs.length).to eq(2) # One removed
+    expect(paragraphs[0].classes).to eq(['outer', 'class'])
+    expect(paragraphs[1].classes).to eq([])
+    expect(images.length).to eq(1)
+    expect(images[0].classes).to eq(['image', 'class'])
+    expect(images[0].attr('alt')).to eq('This image has classes')
+  end
+
 end
-
-
-

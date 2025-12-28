@@ -651,4 +651,231 @@ RSpec.describe ShowoffUtils do
       end
     end
   end
+
+  # New tests for create_gems_file
+  describe '.create_gems_file' do
+    it 'creates a new file with proper content' do
+      Dir.mktmpdir do |dir|
+        path = File.join(dir, 'Gemfile')
+        formatter = ->(gem, version=nil) { version ? "gem '#{gem}', '#{version}'" : "gem '#{gem}'" }
+        header = -> { "# Header" }
+
+        result = described_class.create_gems_file(path, false, false, formatter, header)
+
+        expect(result).to be true
+        content = File.read(path)
+        expect(content).to include("# Header")
+        expect(content).to include("gem 'showoff'")
+        expect(content).to include("gem 'redcarpet'")
+        expect(content).not_to include("gem 'rack'")
+      end
+    end
+
+    it 'adds rack gem when password is true' do
+      Dir.mktmpdir do |dir|
+        path = File.join(dir, 'Gemfile')
+        formatter = ->(gem, version=nil) { version ? "gem '#{gem}', '#{version}'" : "gem '#{gem}'" }
+
+        result = described_class.create_gems_file(path, true, false, formatter)
+
+        expect(result).to be true
+        content = File.read(path)
+        expect(content).to include("gem 'rack'")
+      end
+    end
+
+    it 'does not overwrite existing file without force' do
+      Dir.mktmpdir do |dir|
+        path = File.join(dir, 'Gemfile')
+        File.write(path, "original content")
+        formatter = ->(gem, version=nil) { version ? "gem '#{gem}', '#{version}'" : "gem '#{gem}'" }
+
+        result = described_class.create_gems_file(path, false, false, formatter)
+
+        expect(result).to be false
+        expect(File.read(path)).to eq("original content")
+      end
+    end
+
+    it 'overwrites existing file with force' do
+      Dir.mktmpdir do |dir|
+        path = File.join(dir, 'Gemfile')
+        File.write(path, "original content")
+        formatter = ->(gem, version=nil) { version ? "gem '#{gem}', '#{version}'" : "gem '#{gem}'" }
+
+        result = described_class.create_gems_file(path, false, true, formatter)
+
+        expect(result).to be true
+        expect(File.read(path)).not_to eq("original content")
+        expect(File.read(path)).to include("gem 'showoff'")
+      end
+    end
+  end
+
+  # New tests for add_new_dir
+  describe '.add_new_dir' do
+    it 'creates directory and updates showoff.json' do
+      Dir.mktmpdir do |dir|
+        Dir.chdir(dir) do
+          # Create initial showoff.json
+          File.write('showoff.json', JSON.generate({"name" => "Test Preso", "sections" => []}))
+
+          described_class.add_new_dir('new_section')
+
+          # Check directory was created
+          expect(Dir.exist?('new_section')).to be true
+
+          # Check showoff.json was updated
+          json = JSON.parse(File.read('showoff.json'))
+          expect(json["section"]).to eq('new_section')
+        end
+      end
+    end
+  end
+
+  # New tests for add_slide
+  describe '.add_slide' do
+    it 'creates a new slide file with default options' do
+      Dir.mktmpdir do |dir|
+        Dir.chdir(dir) do
+          FileUtils.mkdir_p('slides')
+
+          expect {
+            described_class.add_slide(dir: 'slides', name: 'test_slide')
+          }.to output(/Wrote/).to_stdout
+
+          expect(File.exist?('slides/test_slide.md')).to be true
+          content = File.read('slides/test_slide.md')
+          expect(content).to include('<!SLIDE')
+          # Title defaults to name when not specified
+          expect(content).to include('# test_slide')
+        end
+      end
+    end
+
+    it 'creates a slide with specified title' do
+      Dir.mktmpdir do |dir|
+        Dir.chdir(dir) do
+          FileUtils.mkdir_p('slides')
+
+          described_class.add_slide(dir: 'slides', name: 'test_slide', title: 'Custom Title')
+
+          content = File.read('slides/test_slide.md')
+          expect(content).to include('# Custom Title')
+        end
+      end
+    end
+
+    it 'creates a slide with specified type' do
+      Dir.mktmpdir do |dir|
+        Dir.chdir(dir) do
+          FileUtils.mkdir_p('slides')
+
+          described_class.add_slide(dir: 'slides', name: 'test_slide', type: 'bullets')
+
+          content = File.read('slides/test_slide.md')
+          expect(content).to include('bullets incremental')
+          expect(content).to include('* bullets')
+        end
+      end
+    end
+
+    it 'creates a slide with code from file' do
+      Dir.mktmpdir do |dir|
+        Dir.chdir(dir) do
+          FileUtils.mkdir_p('slides')
+          code_file = File.join(dir, 'test.rb')
+          File.write(code_file, "puts 'Hello, world!'")
+
+          described_class.add_slide(dir: 'slides', name: 'code_slide', code: code_file)
+
+          content = File.read('slides/code_slide.md')
+          # Code gets indented and wrapped in @@@ markers
+          expect(content).to include('    @@@')
+          expect(content).to include("Hello, world!")
+        end
+      end
+    end
+
+    it 'creates a numbered slide' do
+      Dir.mktmpdir do |dir|
+        Dir.chdir(dir) do
+          FileUtils.mkdir_p('slides')
+          File.write('slides/01_existing.md', '')
+
+          described_class.add_slide(dir: 'slides', name: 'new_slide', number: true)
+
+          expect(File.exist?('slides/02_new_slide.md')).to be true
+        end
+      end
+    end
+
+    it 'outputs slide to stdout when no name specified' do
+      # When name is given but no dir, it writes to current directory
+      Dir.mktmpdir do |dir|
+        Dir.chdir(dir) do
+          expect {
+            described_class.add_slide(name: 'stdout_slide', title: 'Console Slide')
+          }.to output(/Wrote/).to_stdout
+
+          expect(File.exist?('stdout_slide.md')).to be true
+        end
+      end
+    end
+
+    it 'creates a new directory if it does not exist' do
+      Dir.mktmpdir do |dir|
+        Dir.chdir(dir) do
+          # Create initial showoff.json
+          File.write('showoff.json', JSON.generate({"name" => "Test Preso", "sections" => []}))
+
+          allow(described_class).to receive(:add_new_dir).and_call_original
+
+          described_class.add_slide(dir: 'new_dir', name: 'first_slide')
+
+          expect(Dir.exist?('new_dir')).to be true
+          expect(File.exist?('new_dir/first_slide.md')).to be true
+        end
+      end
+    end
+  end
+
+  # New tests for MarkdownConfig.defaults
+  describe MarkdownConfig do
+    describe '.defaults' do
+      it 'returns redcarpet defaults by default' do
+        allow(ShowoffUtils).to receive(:showoff_markdown).and_return('redcarpet')
+        defaults = described_class.defaults('.')
+        expect(defaults).to include(:autolink => true)
+        expect(defaults).to include(:tables => true)
+      end
+
+      it 'returns rdiscount defaults when specified' do
+        allow(ShowoffUtils).to receive(:showoff_markdown).and_return('rdiscount')
+        defaults = described_class.defaults('.')
+        expect(defaults).to include(:autolink => true)
+      end
+
+      it 'returns bluecloth defaults when specified' do
+        allow(ShowoffUtils).to receive(:showoff_markdown).and_return('bluecloth')
+        defaults = described_class.defaults('.')
+        expect(defaults).to include(:auto_links => true)
+        expect(defaults).to include(:tables => true)
+      end
+
+      it 'returns commonmarker defaults when specified' do
+        allow(ShowoffUtils).to receive(:showoff_markdown).and_return('commonmarker')
+        defaults = described_class.defaults('.')
+        expect(defaults).to include(:UNSAFE => true)
+      end
+
+      it 'returns empty hash for maruku and kramdown' do
+        allow(ShowoffUtils).to receive(:showoff_markdown).and_return('maruku')
+        expect(described_class.defaults('.')).to eq({})
+
+        allow(ShowoffUtils).to receive(:showoff_markdown).and_return('kramdown')
+        expect(described_class.defaults('.')).to eq({})
+      end
+    end
+  end
 end

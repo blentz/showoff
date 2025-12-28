@@ -76,4 +76,48 @@ EOF
     expect(content).not_to match(/~~~ENDLANG~~~/)
   end
 
+  it "handles content with no language blocks" do
+    content = "# This is a simple markdown slide with no language blocks"
+    original = content.dup
+
+    Showoff::Locale.setContentLocale(:en)
+    result = Showoff::Compiler::I18n.selectLanguage!(content)
+
+    expect(result).to eq(content)
+    expect(content).to eq(original) # Content should be unchanged
+  end
+
+  it "handles empty content" do
+    content = ""
+
+    Showoff::Locale.setContentLocale(:en)
+    result = Showoff::Compiler::I18n.selectLanguage!(content)
+
+    expect(result).to eq("")
+    expect(content).to eq("")
+  end
+
+  it "returns modified content" do
+    content = <<-EOF
+# Slide with language block
+
+~~~LANG:de~~~
+Deutsches Inhalt
+~~~ENDLANG~~~
+
+~~~LANG:fr~~~
+Ligne 1
+Ligne 2
+Ligne 3
+~~~ENDLANG~~~
+EOF
+
+    Showoff::Locale.setContentLocale(:en)
+    # Resolve picks the best match from available languages
+    Showoff::Locale.setContentLocale(:de)
+    result = Showoff::Compiler::I18n.selectLanguage!(content)
+
+    expect(result).to eq(content)
+    expect(content).to include('Deutsches Inhalt')
+  end
 end

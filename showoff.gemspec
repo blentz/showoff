@@ -35,7 +35,7 @@ Gem::Specification.new do |s|
   s.add_dependency      "sinatra",           "~> 4.2"
   s.add_dependency      "rackup",            "~> 2.3"
   s.add_dependency      "faye-websocket",    "~> 0.12"
-  s.add_dependency      "puma",              "~> 6.6"
+  s.add_dependency      "puma",              ">= 6.6", "< 8.0"
   s.add_dependency      "tilt",              "~> 2.6"
   s.description       = <<-desc
   Showoff is a Sinatra web app that reads simple configuration files for a

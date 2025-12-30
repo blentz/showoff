@@ -69,21 +69,25 @@ pre code {
   #preso,
   .slide {
     background: #fff;
-    width: 1024px;
-    height: 768px;
-    margin-left:auto;
-    margin-right:auto;
-    overflow:hidden;
+    width: 100vw;
+    height: 100vh;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
     background-repeat: no-repeat;
     background-position: center;
     background-size: cover;
     position: relative;
+    box-sizing: border-box;
   }
 
   .slide .content {
-    padding: 20px;
+    width: calc(100% - 40px);
+    height: calc(100% - 60px); /* leave room for footer */
+    margin: 20px;
+    padding: 0;
     box-sizing: border-box;
-    max-height: 100%;
+    overflow: auto;
   }
 
   .slide {
@@ -655,18 +659,20 @@ pre.highlight tr:not(:last-child) {
   font-family: "Lucida Sans Unicode", "Lucida Grande", sans-serif;
 }
 
-/* Mermaid diagram container sizing - fit SVG to container */
+/* Mermaid diagram sizing - viewport-relative, single source of truth */
 div.mermaid {
   display: flex;
   align-items: center;
   justify-content: center;
-  max-height: 600px;
+  max-height: calc(100vh - 100px);
+  max-width: calc(100vw - 40px);
   margin: 10px 0;
+  overflow: visible;
 }
 
 div.mermaid svg {
-  max-width: calc(100% - 40px);
-  max-height: 550px;
+  max-width: 100%;
+  max-height: calc(100vh - 120px);
   height: auto !important;
   width: auto !important;
 }
@@ -1502,16 +1508,17 @@ h1.section_title {
 
 /* Swiper slide navigation */
 #preso.swiper {
-  /* Keep existing 1024x768 dimensions from .slide rule above */
+  width: 100vw;
+  height: 100vh;
   /* Note: overflow must be visible for 3D effects (cube, flip, etc.) */
 }
 #preso .swiper-wrapper {
+  width: 100%;
   height: 100%;
 }
 #preso .swiper-slide.slide {
-  /* Override Swiper's default 100% width with the fixed slide dimensions */
-  width: 1024px;
-  height: 768px;
+  width: 100vw;
+  height: 100vh;
   flex-shrink: 0;
 }
 
@@ -1523,12 +1530,4 @@ h1.section_title {
   overflow: visible;
 }
 
-/* Mermaid diagram constraints */
-.mermaid {
-  max-height: 550px;
-  overflow: auto;
-}
-.mermaid svg {
-  max-height: 550px;
-  max-width: 100%;
-}
+

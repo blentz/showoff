@@ -293,8 +293,10 @@ end
       @edit = false
       @feedback = true
       @pause_msg = "Paused"
-      @css_files = []
-      @js_files = []
+
+      # Load custom CSS and JS files from presentation config
+      @css_files = (Showoff::Config.get('styles') || []).map { |f| "file/#{f}" }
+      @js_files = (Showoff::Config.get('scripts') || []).map { |f| "file/#{f}" }
 
       # Variables needed by header.erb - get from presentation
       @language = @presentation.language

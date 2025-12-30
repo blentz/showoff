@@ -89,10 +89,12 @@ function setupPreso(load_slides) {
 	// bind event handlers
 	toggleKeybinding('on');
 
-	$('#preso').addSwipeEvents().
-//		bind('tap', swipeLeft).         // next
-		bind('swipeleft', swipeLeft).   // next
-		bind('swiperight', swipeRight); // prev
+	// Touch/swipe events - only if addSwipeEvents plugin is loaded
+	if (typeof $.fn.addSwipeEvents === 'function') {
+		$('#preso').addSwipeEvents().
+			bind('swipeleft', swipeLeft).   // next
+			bind('swiperight', swipeRight); // prev
+	}
 
   $('#buttonNav #buttonPrev').click(prevStep);
   $('#buttonNav #buttonNext').click(nextStep);
@@ -295,6 +297,37 @@ function initializePresentation() {
 
 	setupMenu();
 
+	// Initialize mermaid BEFORE showing slides - must happen before mermaid.run() is called
+	// Slides now use full viewport, so use viewport width minus padding
+	var ganttWidth = window.innerWidth - 60;  // account for slide content padding
+	mermaid.initialize({
+		startOnLoad: false,
+		theme: 'default',  // Force consistent theme to prevent auto-detection variance
+		maxTextSize: 99999,
+		gantt: {
+			useWidth: ganttWidth,
+			useMaxWidth: true,
+			barHeight: 25,
+			barGap: 6,
+			topPadding: 75,
+			leftPadding: 150,
+			rightPadding: 20,
+			gridLineStartPadding: 40,
+			fontSize: 12,
+			sectionFontSize: 14,
+			titleTopMargin: 40,
+			numberSectionStyles: 4,
+			displayMode: ''
+		},
+		flowchart: {
+			useMaxWidth: true,
+			htmlLabels: true
+		},
+		pie: {
+			useMaxWidth: true
+		}
+	});
+
 	if (slidesLoaded) {
 		showSlide()
 	} else {
@@ -360,9 +393,6 @@ function initializePresentation() {
   $('.slide.activity .activityToggle input.activity').checkboxradio();
   $('.slide.activity .activityToggle input.activity').change(toggleComplete);
 
-  // initialize mermaid, but don't render yet since the slide sizes are indeterminate
-  mermaid.initialize({startOnLoad:false});
-
   // translate SVG images, inlining them first if needed.
   $('img').simpleStrings({strings: user_translations});
   $('svg').simpleStrings({strings: user_translations});
@@ -405,46 +435,31 @@ function copyBackground(source, target) {
 
 function zoom(presenter) {
   var preso = $("#preso");
-  var hSlide = parseFloat(preso.height());
-  var wSlide = parseFloat(preso.width());
-  var hBody  = parseFloat(preso.parent().height());
-  var wBody  = parseFloat(preso.parent().width());
 
-  var newZoom = Math.min(hBody/hSlide, wBody/wSlide);
-
-  // match the 65/35 split in the stylesheet for the side-by-side layout
+  // Slides now use 100vw/100vh, so no scaling needed for main view
+  // Only apply scaling for presenter view side-by-side layout
   if($("#preview").hasClass("beside")) {
-    wBody  *= 0.64;
-    newZoom = Math.min(hBody/hSlide, wBody/wSlide);
+    var hSlide = parseFloat(preso.height());
+    var wSlide = parseFloat(preso.width());
+    var hBody  = parseFloat(preso.parent().height());
+    var wBody  = parseFloat(preso.parent().width()) * 0.64;
+
+    var newZoom = Math.min(hBody/hSlide, wBody/wSlide);
+    var hMargin = presenter ? (hBody - hSlide) / 2 : (hSlide * newZoom - hSlide) / 2;
+    var wMargin = (wBody - wSlide) / 2;
+
+    preso.css("margin", hMargin + "px " + wMargin + "px");
+    preso.css("transform", "scale(" + newZoom + ")");
+  } else {
+    // Full viewport mode - no scaling, no margins
+    preso.css("margin", "0");
+    preso.css("transform", "none");
   }
 
-  // Calculate margins to center the thing *before* scaling
-  // Vertically center on presenter, top align everywhere else
-  if(presenter) {
-    var hMargin = (hBody - hSlide) /2;
-  }
-  else {
-    // (center of slide to top) - (half of the zoomed slide)
-    //var hMargin = (hSlide/2 * newZoom) - (hSlide / 2);
-    var hMargin = (hSlide * newZoom - hSlide) / 2;
-  }
-  var wMargin = (wBody - wSlide) /2;
-
-  preso.css("margin", hMargin + "px " + wMargin + "px");
-  preso.css("transform", "scale(" + newZoom + ")");
-
-  // correct the zoom factor for the presenter
+  // correct the zoom factor for the presenter annotations
   if (presenter) {
-    // We only want to zoom if the canvas is actually zoomed. Firefox and IE
-    // should *not* be zoomed, so we want to exclude them. We do that by reading
-    // back the zoom property. It will return a string percentage in IE, which
-    // won't parse as a number, and Firefox simply returns undefined.
-    // Because reasons.
-
-    // TODO: When we fix the presenter on IE so the viewport isn't all wack, we
-    // may have to revisit this.
     var zoomLevel = Number( preso.css('zoom') ) || 1;
-    annotations.zoom = 1 / zoomLevel
+    annotations.zoom = 1 / zoomLevel;
   }
 }
 
@@ -1035,10 +1050,21 @@ function showSlide(back_step, updatepv) {
   // make all bigly text tremendous
   currentSlide.children('.content.bigtext').bigtext();
 
-  // render any diagrams on the slide
+  // render any diagrams on the slide using mermaid.run() (mermaid 11+ API)
   var mermaidDivs = currentSlide.find('div.mermaid:not([data-processed])');
   if (mermaidDivs.length > 0) {
-    mermaid.init(undefined, mermaidDivs);
+    // Convert jQuery collection to array of DOM nodes for mermaid.run()
+    var nodes = mermaidDivs.toArray();
+    mermaid.run({ nodes: nodes }).then(function() {
+      // Remove mermaid's inline styles that conflict with CSS
+      currentSlide.find('div.mermaid svg').each(function() {
+        // Clear inline styles so CSS !important rules take over
+        $(this).attr('style', '');
+        $(this).attr('width', '100%');
+      });
+    }).catch(function(err) {
+      console.error('Mermaid render error:', err);
+    });
   }
 
   return ret;

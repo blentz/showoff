@@ -1,0 +1,23 @@
+# Exclude presentations - these are mounted at runtime
+presentations/
+
+# Exclude test fixtures and specs
+spec/
+test/
+
+# Exclude git and CI
+.git/
+.github/
+
+# Exclude documentation
+documentation/
+*.md
+!README.md
+
+# Exclude development files
+.rspec
+.editorconfig
+Rakefile
+
+# Exclude example presentations
+example/

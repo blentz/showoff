@@ -1063,6 +1063,13 @@ form .element {
   border-bottom: 2px solid black;
   margin: 0 0 0.5em 0;
 }
+.introjs-tooltip-header {
+  padding-top: 0;      /* Remove default 10px padding when step numbers are hidden */
+  min-height: auto;    /* Override default 1.5em min-height */
+}
+.introjs-tooltip-title:empty {
+  display: none;       /* Hide empty title element */
+}
 .introjs-tooltip h1 { font-size: 1.3em; }
 .introjs-tooltip h2 { font-size: 1.2em; }
 .introjs-tooltip h3 { font-size: 1.1em; }

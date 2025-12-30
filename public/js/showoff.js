@@ -265,6 +265,9 @@ function initializePresentation() {
 			slideChange: function() {
 				slidenum = this.activeIndex;
 			}
+			// Note: Mermaid rendering is handled in showSlide() with a timeout
+			// rather than here, because slideChangeTransitionEnd doesn't fire
+			// reliably with instant transitions (speed=0) or in presenter view
 		}
 	};
 
@@ -298,15 +301,16 @@ function initializePresentation() {
 	setupMenu();
 
 	// Initialize mermaid BEFORE showing slides - must happen before mermaid.run() is called
-	// Slides now use full viewport, so use viewport width minus padding
-	var ganttWidth = window.innerWidth - 60;  // account for slide content padding
+	// Render at normal size - the slide's CSS transform will handle scaling in presenter view
+	var ganttWidth = 900;  // Fixed width for consistent rendering
+
 	mermaid.initialize({
 		startOnLoad: false,
-		theme: 'default',  // Force consistent theme to prevent auto-detection variance
+		theme: 'default',
 		maxTextSize: 99999,
 		gantt: {
 			useWidth: ganttWidth,
-			useMaxWidth: true,
+			useMaxWidth: false,
 			barHeight: 25,
 			barGap: 6,
 			topPadding: 75,
@@ -434,26 +438,77 @@ function copyBackground(source, target) {
 }
 
 function zoom(presenter) {
+  console.log('zoom() ENTERING');
   var preso = $("#preso");
+  var preview = $("#preview");
 
-  // Slides now use 100vw/100vh, so no scaling needed for main view
-  // Only apply scaling for presenter view side-by-side layout
-  if($("#preview").hasClass("beside")) {
+  // Check if we're in presenter view (has #preview container)
+  var isPresenter = preview.length > 0;
+  var isBeside = preview.hasClass("beside");
+  var isThumbs = preview.hasClass("thumbs");
+
+  console.log('zoom() called: isPresenter=' + isPresenter + ', isBeside=' + isBeside + ', isThumbs=' + isThumbs);
+
+  if (isPresenter) {
+    // Presenter view - always need to scale fixed slides to fit
     var hSlide = parseFloat(preso.height());
     var wSlide = parseFloat(preso.width());
     var hBody  = parseFloat(preso.parent().height());
-    var wBody  = parseFloat(preso.parent().width()) * 0.64;
+    var wBody  = parseFloat(preso.parent().width());
+
+    console.log('zoom() presenter: slide=' + wSlide + 'x' + hSlide + ', container=' + wBody + 'x' + hBody);
+
+    // For beside layout, only use 64% of width for the main slide
+    if (isBeside) {
+      wBody = wBody * 0.64;
+    }
+
+    // For thumbnail layout, account for the padding-top: 100px on #preview
+    // and the bottom: 1em positioning, leaving less vertical space
+    if (isThumbs) {
+      hBody = hBody - 100 - 16;  // 100px padding-top, ~16px (1em) bottom margin
+    }
 
     var newZoom = Math.min(hBody/hSlide, wBody/wSlide);
-    var hMargin = presenter ? (hBody - hSlide) / 2 : (hSlide * newZoom - hSlide) / 2;
-    var wMargin = (wBody - wSlide) / 2;
+    console.log('zoom() newZoom=' + newZoom);
 
-    preso.css("margin", hMargin + "px " + wMargin + "px");
-    preso.css("transform", "scale(" + newZoom + ")");
+    if (isThumbs) {
+      // Thumbnail layout: CSS positions #preso with position:absolute, bottom:1em,
+      // left:0, right:0, margin-left:auto, margin-right:auto
+      // We need to override CSS positioning and handle it entirely in JS
+      var scaledHeight = hSlide * newZoom;
+      var scaledWidth = wSlide * newZoom;
+
+      // Calculate position to center the scaled slide in available space
+      // Available space starts at 100px from top (padding-top) and ends 1em from bottom
+      var availableHeight = hBody - 100 - 16;  // account for padding and bottom margin
+      var topOffset = 100 + (availableHeight - scaledHeight) / 2;
+      var leftOffset = (wBody - scaledWidth) / 2;
+
+      // Override CSS positioning - use top/left instead of bottom with auto margins
+      preso.css("transform-origin", "0 0");
+      preso.css("transform", "scale(" + newZoom + ")");
+      preso.css("bottom", "auto");
+      preso.css("top", topOffset + "px");
+      preso.css("left", leftOffset + "px");
+      preso.css("right", "auto");
+      preso.css("margin", "0");
+    } else {
+      // Default and beside layouts: use top-left transform-origin with explicit centering
+      var scaledHeight = hSlide * newZoom;
+      var scaledWidth = wSlide * newZoom;
+      var hMargin = (hBody - scaledHeight) / 2;
+      var wMargin = (wBody - scaledWidth) / 2;
+
+      preso.css("transform-origin", "0 0");
+      preso.css("transform", "scale(" + newZoom + ")");
+      preso.css("margin", hMargin + "px " + wMargin + "px");
+    }
   } else {
-    // Full viewport mode - no scaling, no margins
+    // Regular view - slides use 100vw/100vh, no scaling needed
     preso.css("margin", "0");
     preso.css("transform", "none");
+    preso.css("transform-origin", "");
   }
 
   // correct the zoom factor for the presenter annotations
@@ -1050,22 +1105,12 @@ function showSlide(back_step, updatepv) {
   // make all bigly text tremendous
   currentSlide.children('.content.bigtext').bigtext();
 
-  // render any diagrams on the slide using mermaid.run() (mermaid 11+ API)
-  var mermaidDivs = currentSlide.find('div.mermaid:not([data-processed])');
-  if (mermaidDivs.length > 0) {
-    // Convert jQuery collection to array of DOM nodes for mermaid.run()
-    var nodes = mermaidDivs.toArray();
-    mermaid.run({ nodes: nodes }).then(function() {
-      // Remove mermaid's inline styles that conflict with CSS
-      currentSlide.find('div.mermaid svg').each(function() {
-        // Clear inline styles so CSS !important rules take over
-        $(this).attr('style', '');
-        $(this).attr('width', '100%');
-      });
-    }).catch(function(err) {
-      console.error('Mermaid render error:', err);
-    });
-  }
+  // Mermaid rendering: always call after a delay to ensure slide is visible
+  // The slideChangeTransitionEnd event doesn't always fire reliably,
+  // especially with instant transitions (speed=0) or in presenter view
+  setTimeout(function() {
+    renderMermaidOnCurrentSlide();
+  }, 350);  // Wait for transition (300ms) + buffer
 
   return ret;
 }
@@ -1073,6 +1118,74 @@ function showSlide(back_step, updatepv) {
 function getSlideProgress()
 {
 	return (slidenum + 1) + '/' + slideTotal
+}
+
+// Render mermaid diagrams on the current slide
+// Must temporarily remove CSS transforms so mermaid measures text correctly
+function renderMermaidOnCurrentSlide() {
+  console.log('renderMermaidOnCurrentSlide called, currentSlide:', currentSlide ? 'exists' : 'null');
+  if (!currentSlide) return;
+
+  var allMermaidDivs = currentSlide.find('div.mermaid');
+  var mermaidDivs = currentSlide.find('div.mermaid:not([data-processed])');
+
+  console.log('renderMermaidOnCurrentSlide: total mermaid divs:', allMermaidDivs.length,
+              'unprocessed:', mermaidDivs.length);
+
+  if (mermaidDivs.length > 0) {
+    var preso = $("#preso");
+    var savedTransform = preso.css('transform');
+    var savedTransformOrigin = preso.css('transform-origin');
+    var hadTransform = savedTransform && savedTransform !== 'none';
+
+    console.log('Mermaid render: savedTransform =', savedTransform, 'hadTransform =', hadTransform);
+
+    // Temporarily remove transform so mermaid measures text at actual size
+    // Without this, getBoundingClientRect returns scaled dimensions and
+    // mermaid generates foreignObject elements with incorrect heights
+    if (hadTransform) {
+      preso.css('transform', 'none');
+      console.log('Mermaid render: removed transform');
+    }
+
+    var nodes = mermaidDivs.toArray();
+
+    // Force a reflow BEFORE mermaid runs to ensure the transform removal is applied
+    // Without this, the browser may not have recalculated layout yet
+    void preso[0].offsetHeight;
+
+    // Use requestAnimationFrame to ensure browser has painted without transform
+    // before mermaid measures text dimensions
+    requestAnimationFrame(function() {
+      // Double-RAF ensures we're past both style recalc and paint
+      requestAnimationFrame(function() {
+        console.log('Mermaid render: starting mermaid.run after reflow');
+
+        mermaid.run({ nodes: nodes }).then(function() {
+          console.log('Mermaid render: completed successfully');
+          currentSlide.find('div.mermaid svg').each(function() {
+            $(this).attr('style', '');
+            $(this).attr('width', '100%');
+          });
+
+          // Restore transform after mermaid has rendered
+          if (hadTransform) {
+            preso.css('transform', savedTransform);
+            preso.css('transform-origin', savedTransformOrigin);
+            console.log('Mermaid render: restored transform');
+          }
+        }).catch(function(err) {
+          console.error('Mermaid render error:', err);
+
+          // Restore transform even on error
+          if (hadTransform) {
+            preso.css('transform', savedTransform);
+            preso.css('transform-origin', savedTransformOrigin);
+          }
+        });
+      });
+    });
+  }
 }
 
 function getAllSections()

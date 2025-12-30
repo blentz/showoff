@@ -81,6 +81,13 @@ pre code {
     box-sizing: border-box;
   }
 
+  /* Presenter view needs fixed dimensions for the zoom/scale calculations to work */
+  body.presenter #preso,
+  body.presenter .slide {
+    width: 1024px;
+    height: 768px;
+  }
+
   .slide .content {
     width: calc(100% - 40px);
     height: calc(100% - 60px); /* leave room for footer */
@@ -659,24 +666,35 @@ pre.highlight tr:not(:last-child) {
   font-family: "Lucida Sans Unicode", "Lucida Grande", sans-serif;
 }
 
-/* Mermaid diagram sizing - viewport-relative, single source of truth */
+/* Mermaid diagram sizing - use % of parent for consistent rendering */
 div.mermaid {
   display: flex;
   align-items: center;
   justify-content: center;
-  max-height: calc(100vh - 100px);
-  max-width: calc(100vw - 40px);
+  max-height: 90%;
+  max-width: 100%;
   margin: 10px 0;
   overflow: visible;
 }
 
 div.mermaid svg {
   max-width: 100%;
-  max-height: calc(100vh - 120px);
+  max-height: 100%;
   height: auto !important;
   width: auto !important;
 }
 
+/* Force mermaid to use fixed font sizes, not viewport-relative
+   This prevents text clipping when presentations use vw/vh font sizing */
+div.mermaid,
+div.mermaid *,
+div.mermaid .nodeLabel,
+div.mermaid .edgeLabel,
+div.mermaid .label,
+div.mermaid foreignObject,
+div.mermaid foreignObject * {
+  font-size: 16px !important;
+}
 
 /**********************************
  ***       code execution       ***
@@ -1520,6 +1538,16 @@ h1.section_title {
   width: 100vw;
   height: 100vh;
   flex-shrink: 0;
+}
+
+/* Presenter view needs fixed dimensions for zoom/scale calculations */
+body.presenter #preso.swiper {
+  width: 1024px;
+  height: 768px;
+}
+body.presenter #preso .swiper-slide.slide {
+  width: 1024px;
+  height: 768px;
 }
 
 /* Allow 3D effects to render outside container bounds */

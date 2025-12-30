@@ -363,6 +363,10 @@ end
       @interactive = true
       @static = false
 
+      # Load custom CSS and JS files from presentation config (same as main view)
+      @css_files = (Showoff::Config.get('styles') || []).map { |f| "file/#{f}" }
+      @js_files = (Showoff::Config.get('scripts') || []).map { |f| "file/#{f}" }
+
       # Handle presenter cookies
       manage_client_cookies(true)
 

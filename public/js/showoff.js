@@ -1099,12 +1099,11 @@ function showSlide(back_step, updatepv) {
   // make all bigly text tremendous
   currentSlide.children('.content.bigtext').bigtext();
 
-  // Mermaid rendering: always call after a delay to ensure slide is visible
-  // The slideChangeTransitionEnd event doesn't always fire reliably,
-  // especially with instant transitions (speed=0) or in presenter view
+  // Mermaid rendering: call after brief delay to ensure slide DOM is ready
+  // We hide diagrams during render, so we don't need to wait for full transition
   setTimeout(function() {
     renderMermaidOnCurrentSlide();
-  }, 350);  // Wait for transition (300ms) + buffer
+  }, 50);  // Brief delay for DOM stability
 
   return ret;
 }
@@ -1127,44 +1126,43 @@ function renderMermaidOnCurrentSlide() {
     var savedTransformOrigin = preso.css('transform-origin');
     var hadTransform = savedTransform && savedTransform !== 'none';
 
-    // Temporarily remove transform so mermaid measures text at actual size
-    // Without this, getBoundingClientRect returns scaled dimensions and
-    // mermaid generates foreignObject elements with incorrect heights
     if (hadTransform) {
+      // Hide mermaid containers during transform manipulation to prevent visual flash
+      mermaidDivs.css('visibility', 'hidden');
+
+      // Remove transform so mermaid measures text at actual size
       preso.css('transform', 'none');
+
+      // Force reflow to ensure transform removal is applied
+      void preso[0].offsetHeight;
     }
 
     var nodes = mermaidDivs.toArray();
 
-    // Force a reflow BEFORE mermaid runs to ensure the transform removal is applied
-    // Without this, the browser may not have recalculated layout yet
-    void preso[0].offsetHeight;
-
-    // Use requestAnimationFrame to ensure browser has painted without transform
-    // before mermaid measures text dimensions
+    // Single RAF is sufficient after forced reflow
     requestAnimationFrame(function() {
-      // Double-RAF ensures we're past both style recalc and paint
-      requestAnimationFrame(function() {
-        mermaid.run({ nodes: nodes }).then(function() {
-          currentSlide.find('div.mermaid svg').each(function() {
-            $(this).attr('style', '');
-            $(this).attr('width', '100%');
-          });
-
-          // Restore transform after mermaid has rendered
-          if (hadTransform) {
-            preso.css('transform', savedTransform);
-            preso.css('transform-origin', savedTransformOrigin);
-          }
-        }).catch(function(err) {
-          console.error('Mermaid render error:', err);
-
-          // Restore transform even on error
-          if (hadTransform) {
-            preso.css('transform', savedTransform);
-            preso.css('transform-origin', savedTransformOrigin);
-          }
+      mermaid.run({ nodes: nodes }).then(function() {
+        currentSlide.find('div.mermaid svg').each(function() {
+          $(this).attr('style', '');
+          $(this).attr('width', '100%');
         });
+
+        // Restore transform and show diagrams
+        if (hadTransform) {
+          preso.css('transform', savedTransform);
+          preso.css('transform-origin', savedTransformOrigin);
+          // Show diagrams after transform is restored
+          mermaidDivs.css('visibility', 'visible');
+        }
+      }).catch(function(err) {
+        console.error('Mermaid render error:', err);
+
+        // Restore transform and visibility even on error
+        if (hadTransform) {
+          preso.css('transform', savedTransform);
+          preso.css('transform-origin', savedTransformOrigin);
+          mermaidDivs.css('visibility', 'visible');
+        }
       });
     });
   }

@@ -494,6 +494,12 @@ function zoom(presenter) {
       var hMargin = (hBody - scaledHeight) / 2;
       var wMargin = (wBody - scaledWidth) / 2;
 
+      // Reset any positioning set by thumbnail layout
+      preso.css("top", "");
+      preso.css("left", "");
+      preso.css("bottom", "");
+      preso.css("right", "");
+
       preso.css("transform-origin", "0 0");
       preso.css("transform", "scale(" + newZoom + ")");
       preso.css("margin", hMargin + "px " + wMargin + "px");

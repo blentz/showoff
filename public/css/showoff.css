@@ -677,6 +677,17 @@ div.mermaid {
   overflow: visible;
 }
 
+/* Hide raw mermaid source text before rendering completes.
+   Mermaid adds data-processed="true" and inserts SVG when done. */
+div.mermaid:not([data-processed]) {
+  visibility: hidden;
+}
+
+/* Show the rendered SVG */
+div.mermaid[data-processed="true"] {
+  visibility: visible;
+}
+
 div.mermaid svg {
   max-width: 100%;
   max-height: 100%;

@@ -1115,6 +1115,7 @@ function getSlideProgress()
 
 // Render mermaid diagrams on the current slide
 // Must temporarily remove CSS transforms so mermaid measures text correctly
+// CSS hides unprocessed mermaid divs, so no visible text-to-diagram flash
 function renderMermaidOnCurrentSlide() {
   if (!currentSlide) return;
 
@@ -1127,9 +1128,6 @@ function renderMermaidOnCurrentSlide() {
     var hadTransform = savedTransform && savedTransform !== 'none';
 
     if (hadTransform) {
-      // Hide mermaid containers during transform manipulation to prevent visual flash
-      mermaidDivs.css('visibility', 'hidden');
-
       // Remove transform so mermaid measures text at actual size
       preso.css('transform', 'none');
 
@@ -1147,21 +1145,18 @@ function renderMermaidOnCurrentSlide() {
           $(this).attr('width', '100%');
         });
 
-        // Restore transform and show diagrams
+        // Restore transform - CSS handles visibility via data-processed attribute
         if (hadTransform) {
           preso.css('transform', savedTransform);
           preso.css('transform-origin', savedTransformOrigin);
-          // Show diagrams after transform is restored
-          mermaidDivs.css('visibility', 'visible');
         }
       }).catch(function(err) {
         console.error('Mermaid render error:', err);
 
-        // Restore transform and visibility even on error
+        // Restore transform even on error
         if (hadTransform) {
           preso.css('transform', savedTransform);
           preso.css('transform-origin', savedTransformOrigin);
-          mermaidDivs.css('visibility', 'visible');
         }
       });
     });

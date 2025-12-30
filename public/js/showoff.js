@@ -438,7 +438,6 @@ function copyBackground(source, target) {
 }
 
 function zoom(presenter) {
-  console.log('zoom() ENTERING');
   var preso = $("#preso");
   var preview = $("#preview");
 
@@ -447,16 +446,12 @@ function zoom(presenter) {
   var isBeside = preview.hasClass("beside");
   var isThumbs = preview.hasClass("thumbs");
 
-  console.log('zoom() called: isPresenter=' + isPresenter + ', isBeside=' + isBeside + ', isThumbs=' + isThumbs);
-
   if (isPresenter) {
     // Presenter view - always need to scale fixed slides to fit
     var hSlide = parseFloat(preso.height());
     var wSlide = parseFloat(preso.width());
     var hBody  = parseFloat(preso.parent().height());
     var wBody  = parseFloat(preso.parent().width());
-
-    console.log('zoom() presenter: slide=' + wSlide + 'x' + hSlide + ', container=' + wBody + 'x' + hBody);
 
     // For beside layout, only use 64% of width for the main slide
     if (isBeside) {
@@ -470,7 +465,6 @@ function zoom(presenter) {
     }
 
     var newZoom = Math.min(hBody/hSlide, wBody/wSlide);
-    console.log('zoom() newZoom=' + newZoom);
 
     if (isThumbs) {
       // Thumbnail layout: CSS positions #preso with position:absolute, bottom:1em,
@@ -1123,14 +1117,9 @@ function getSlideProgress()
 // Render mermaid diagrams on the current slide
 // Must temporarily remove CSS transforms so mermaid measures text correctly
 function renderMermaidOnCurrentSlide() {
-  console.log('renderMermaidOnCurrentSlide called, currentSlide:', currentSlide ? 'exists' : 'null');
   if (!currentSlide) return;
 
-  var allMermaidDivs = currentSlide.find('div.mermaid');
   var mermaidDivs = currentSlide.find('div.mermaid:not([data-processed])');
-
-  console.log('renderMermaidOnCurrentSlide: total mermaid divs:', allMermaidDivs.length,
-              'unprocessed:', mermaidDivs.length);
 
   if (mermaidDivs.length > 0) {
     var preso = $("#preso");
@@ -1138,14 +1127,11 @@ function renderMermaidOnCurrentSlide() {
     var savedTransformOrigin = preso.css('transform-origin');
     var hadTransform = savedTransform && savedTransform !== 'none';
 
-    console.log('Mermaid render: savedTransform =', savedTransform, 'hadTransform =', hadTransform);
-
     // Temporarily remove transform so mermaid measures text at actual size
     // Without this, getBoundingClientRect returns scaled dimensions and
     // mermaid generates foreignObject elements with incorrect heights
     if (hadTransform) {
       preso.css('transform', 'none');
-      console.log('Mermaid render: removed transform');
     }
 
     var nodes = mermaidDivs.toArray();
@@ -1159,10 +1145,7 @@ function renderMermaidOnCurrentSlide() {
     requestAnimationFrame(function() {
       // Double-RAF ensures we're past both style recalc and paint
       requestAnimationFrame(function() {
-        console.log('Mermaid render: starting mermaid.run after reflow');
-
         mermaid.run({ nodes: nodes }).then(function() {
-          console.log('Mermaid render: completed successfully');
           currentSlide.find('div.mermaid svg').each(function() {
             $(this).attr('style', '');
             $(this).attr('width', '100%');
@@ -1172,7 +1155,6 @@ function renderMermaidOnCurrentSlide() {
           if (hadTransform) {
             preso.css('transform', savedTransform);
             preso.css('transform-origin', savedTransformOrigin);
-            console.log('Mermaid render: restored transform');
           }
         }).catch(function(err) {
           console.error('Mermaid render error:', err);

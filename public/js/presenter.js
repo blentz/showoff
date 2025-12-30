@@ -1108,7 +1108,5 @@ function chooseLayout(layout)
 
   document.cookie = "layout="+layout
   mode.layout = layout;
-  console.log('chooseLayout: about to call zoom(true)');
   zoom(true);
-  console.log('chooseLayout: zoom(true) returned');
 }

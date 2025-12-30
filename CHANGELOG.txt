@@ -2,11 +2,15 @@
   * Fixed presenter view scaling for all layouts (default, beside, thumbnail)
   * Fixed mermaid diagram text clipping in presenter view
     - Temporarily removes CSS transform during mermaid rendering
-    - Uses double requestAnimationFrame for reliable text measurement
+    - Hides diagrams until fully rendered to eliminate visual flash
   * Fixed thumbnail layout positioning with explicit top/left calculation
   * Added fixed slide dimensions for presenter view zoom calculations
   * Custom CSS/JS files from showoff.json now load in presenter view
   * Fixed mermaid font sizing to prevent viewport-relative issues
+  * Improved mermaid rendering performance
+    - Reduced render delay from 350ms to 50ms
+    - CSS hides raw mermaid source text until SVG renders
+  * Fixed gantt chart x-axis date label overlap with vertical staggering
   * Added comprehensive STYLING_GUIDE.rdoc documentation
     - Complete CSS class and ID reference
     - Tips for custom themes and branding

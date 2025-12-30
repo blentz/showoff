@@ -713,7 +713,7 @@ div.mermaid .grid .tick:nth-child(odd) text {
   transform: translateY(0);
 }
 div.mermaid .grid .tick:nth-child(even) text {
-  transform: translateY(12px);
+  transform: translateY(15px);
 }
 
 /**********************************

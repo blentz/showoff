@@ -707,6 +707,15 @@ div.mermaid foreignObject * {
   font-size: 16px !important;
 }
 
+/* Gantt chart x-axis date labels: stagger every other label vertically
+   to prevent overlapping dates on dense timelines */
+div.mermaid .grid .tick:nth-child(odd) text {
+  transform: translateY(0);
+}
+div.mermaid .grid .tick:nth-child(even) text {
+  transform: translateY(12px);
+}
+
 /**********************************
  ***       code execution       ***
  **********************************/

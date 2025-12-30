@@ -1,0 +1,610 @@
+= Showoff Styling Guide
+
+This guide provides comprehensive documentation for styling Showoff presentations,
+covering both the audience view and presenter view. Whether you're creating a
+custom theme or making minor adjustments, this reference will help you understand
+how styles are applied and what you can customize.
+
+== Overview
+
+Showoff uses a layered CSS architecture:
+
+1. *Base styles* (`showoff.css`) - Core layout and default appearance
+2. *Presenter styles* (`presenter.css`) - Presenter view specific styling
+3. *Syntax highlighting* (`highlight/*.css`) - Code block themes
+4. *Custom styles* - Your presentation-specific CSS files
+
+Custom styles are loaded last, allowing you to override any default styling.
+
+== Loading Custom Styles
+
+=== Automatic Loading
+
+Any +*.css+ files in your presentation's root directory are automatically loaded.
+
+=== Manual Configuration
+
+Specify styles in +showoff.json+:
+
+  {
+    "styles": "assets/branding.css"
+  }
+
+Or load multiple files:
+
+  {
+    "styles": ["assets/branding.css", "assets/custom.css"]
+  }
+
+Files are loaded relative to your presentation root. The +file/+ prefix is added
+automatically when served.
+
+== Audience View vs Presenter View
+
+Understanding the structural differences between views is essential for effective
+styling.
+
+=== Audience View
+
+The audience sees a full-screen presentation optimized for viewing slides.
+
+Key characteristics:
+- Slides use viewport units (100vw x 100vh) by default
+- Single slide visible at a time (Swiper carousel)
+- Minimal UI chrome (hamburger menu, optional footer)
+- Body has no special class
+
+=== Presenter View
+
+The presenter sees a control dashboard with current slide, notes, and navigation.
+
+Key characteristics:
+- Slides have fixed dimensions (1024x768 default) with CSS transform scaling
+- Multiple elements visible: current slide, thumbnails, notes, timer
+- Full toolbar and sidebar
+- Body has class +presenter+
+
+=== Targeting Each View
+
+  /* Audience view only */
+  body:not(.presenter) .slide {
+    font-size: 2em;
+  }
+
+  /* Presenter view only */
+  body.presenter .slide {
+    /* styles here */
+  }
+
+  /* Both views */
+  .slide {
+    /* styles here */
+  }
+
+== Core Element Structure
+
+=== Slide Structure
+
+Every slide follows this HTML structure:
+
+  <div class="slide [classes]" id="[slideId]" data-section="..." data-title="...">
+    <div class="content [contentClasses]" ref="...">
+      <!-- Your slide content -->
+    </div>
+    <div class="notes-section notes">...</div>
+    <div class="notes-section handouts">...</div>
+    <canvas class="annotations"></canvas>
+  </div>
+
+=== Key Element IDs
+
+==== Audience View
+
+  #preso              Main presentation container (Swiper)
+  #slides             Offscreen container holding all slides
+  #footer             Bottom info bar
+  #pauseScreen        Screen blanking overlay
+  #hamburger          Menu toggle button
+  #feedbackSidebar    Slide-out menu
+  #navigation         Table of contents
+  #notes              Speaker notes display (when visible)
+  #buttonNav          Touch navigation buttons
+  #help-modal         Help dialog
+
+==== Presenter View
+
+  #pagewrapper        Root flex container
+  #topbar             Top toolbar
+  #main               Main content area
+  #sidebar            Left sidebar (timer, pace, TOC)
+  #presenter          Center preview area
+  #preview            Slide preview container
+  #preso              Current slide display
+  #prevSlide          Previous slide thumbnail
+  #nextSlide          Next slide thumbnail
+  #notes-wrapper      Notes section wrapper
+  #notes              Speaker notes
+  #statusbar          Progress bar area
+  #progress           jQuery UI progress bar
+  #timerSection       Countdown timer
+  #questions          Audience questions list
+  #annotationToolbar  Drawing tools
+
+== Slide Classes Reference
+
+=== Layout Classes
+
+  center          Vertically center content
+  full-page       Background image covers entire slide
+  bullets         Large centered bullet points (no bullet markers)
+  smbullets       Smaller bullet points
+
+=== Typography Classes
+
+  small           80% font size
+  smaller         70% font size
+  bigtext         Auto-scale text to fill slide (uses BigText.js)
+  command         Monospace h1 titles
+  code            Monospace entire slide
+
+=== Behavior Classes
+
+  incremental     Step-through child elements on click/advance
+  autoplay        Auto-play video elements
+  transition=X    Override slide transition (none, fade, slide, cube, flip)
+
+=== Appearance Classes
+
+  inverse         Dark background, light text
+  subsection      Section divider styling
+  title-slide     Opening/title slide styling
+  cover           Exclude from TOC, no h1 border
+  toc             Exclude from TOC
+
+=== Special Purpose Classes
+
+  commandline     Terminal-style code blocks with window chrome
+  execute         Code blocks are executable (requires -x flag)
+  form=ID         Form slide for audience interaction
+  activity        Activity tracking toggle
+  answerkey       Display form answer key
+  printonly       Only appears in PDF/print output
+  noprint         Hidden in PDF/print output
+  supplemental    Supplemental/handout materials
+
+== Content Classes
+
+=== Incremental Content
+
+  <div class="incremental">
+    <p>First point</p>
+    <p>Second point (hidden until advance)</p>
+  </div>
+
+Hidden incremental elements get class +hidden+:
+
+  .incremental.hidden {
+    visibility: hidden;
+  }
+
+  /* In presenter view, show hidden content dimmed */
+  body.presenter .incremental.hidden {
+    visibility: visible;
+    color: #ccc;
+  }
+
+=== Callout Boxes
+
+Basic callout:
+
+  .callout This is highlighted text
+
+Callout variants with icons:
+
+  .callout        Basic box, no icon
+  .callout.info       Info circle icon
+  .callout.warning    Exclamation triangle
+  .callout.question   Question mark
+  .callout.exercise   Pencil icon
+  .callout.stop       Stop/ban icon
+  .callout.thumbsup   Thumbs up
+  .callout.conversation   Speech bubble
+  .callout.glossary   Book icon
+  .callout.terminal   Terminal icon
+
+== Code Styling
+
+=== Syntax Highlighting Themes
+
+Set the theme in +showoff.json+:
+
+  {
+    "highlight": "monokai"
+  }
+
+104 themes available in +public/css/highlight/+:
+
+Popular choices:
+- +default+ - Light, neutral
+- +github+ - GitHub style
+- +monokai+ - Dark, popular with developers
+- +solarized-dark+ / +solarized-light+ - Solarized color scheme
+- +tomorrow-night+ - Easy on the eyes
+- +dracula+ - Dark purple theme
+- +vs+ - Visual Studio light
+- +zenburn+ - Low contrast dark
+
+=== Code Block Structure
+
+  <pre class="highlight">
+    <code class="language-ruby">
+      def hello
+        puts "Hello, World!"
+      end
+    </code>
+  </pre>
+
+=== Code Modifier Classes
+
+  .numbers        Show line numbers
+  .execute        Clickable to run code (requires -x flag)
+  .executing      Currently running (shows spinner)
+  .code_wrap      Wrap long lines
+  .nochrome       Console without window decoration
+  .highlightedLine    Highlighted line (for callouts)
+
+=== Console Window Styling
+
+The +commandline+ slide class creates terminal-style windows:
+
+  pre.highlight code.language-console {
+    /* Terminal styling */
+  }
+
+  pre.highlight code.language-powershellconsole {
+    /* PowerShell styling */
+  }
+
+Custom console colors example:
+
+  pre.highlight code.language-console {
+    background: #1a1a1a;
+    color: #00ff00;  /* Matrix green */
+  }
+
+== Presenter View Layouts
+
+The presenter view supports multiple layouts, controlled by classes on +#preview+:
+
+=== Default Layout
+
+Current slide centered in preview area.
+
+=== Beside Layout
+
+  #preview.beside
+
+Current slide on left (64% width), next slide thumbnail on right.
+
+=== Thumbnail Layout
+
+  #preview.thumbs
+
+Current slide centered with previous/next thumbnails at top corners.
+
+=== Floating Layout
+
+  body.floating
+
+Separate browser windows for current slide, next slide, and notes.
+
+== Customizing Slide Dimensions
+
+=== Default Dimensions
+
+Showoff uses 1024x768 (4:3) as the base slide size for presenter view scaling.
+
+=== Custom Dimensions
+
+For widescreen (16:9) presentations:
+
+  /* Override base dimensions */
+  body.presenter #preso,
+  body.presenter .slide {
+    width: 1600px;
+    height: 900px;
+  }
+
+  body.presenter #preso.swiper {
+    width: 1600px;
+    height: 900px;
+  }
+
+  body.presenter #preso .swiper-slide.slide {
+    width: 1600px;
+    height: 900px;
+  }
+
+The +zoom()+ function in showoff.js calculates scaling based on these dimensions.
+
+== Tips and Tricks
+
+=== Tip: Consistent Font Sizing
+
+Avoid viewport-relative units (+vw+, +vh+) in slide content - they cause issues
+in presenter view where slides are scaled.
+
+  /* Bad - breaks in presenter view */
+  .slide h1 {
+    font-size: 5vw;
+  }
+
+  /* Good - scales predictably */
+  .slide h1 {
+    font-size: 2.5em;
+  }
+
+=== Tip: Background Images
+
+For background images that fill the slide:
+
+  .slide.my-background {
+    background-image: url(file/images/bg.jpg);
+    background-size: cover;
+    background-position: center;
+  }
+
+Or use the +full-page+ class for automatic handling.
+
+=== Tip: Print-Friendly Styles
+
+Use +@media print+ for PDF-specific styling:
+
+  @media print {
+    .slide {
+      page-break-after: always;
+    }
+
+    .noprint {
+      display: none !important;
+    }
+  }
+
+=== Tip: Dark Mode Slides
+
+Create a dark theme slide class:
+
+  .slide.dark {
+    background-color: #1a1a1a;
+    color: #e0e0e0;
+  }
+
+  .slide.dark h1,
+  .slide.dark h2 {
+    color: #ffffff;
+  }
+
+  .slide.dark a {
+    color: #6db3f2;
+  }
+
+=== Tip: Branding Header/Footer
+
+Add consistent branding across slides:
+
+  .slide::before {
+    content: "";
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 100px;
+    height: 40px;
+    background: url(file/images/logo.png) no-repeat;
+    background-size: contain;
+  }
+
+  .slide::after {
+    content: "Company Name";
+    position: absolute;
+    bottom: 10px;
+    left: 20px;
+    font-size: 0.8em;
+    color: #999;
+  }
+
+== Gotchas and Common Issues
+
+=== Gotcha: Transform Scaling in Presenter View
+
+The presenter view uses CSS +transform: scale()+ to fit slides. This affects:
+
+- +position: fixed+ elements (they scale with the transform)
+- Mouse coordinates for annotations
+- Any JavaScript using +getBoundingClientRect()+
+
+If you need fixed positioning relative to the viewport (not slide):
+
+  /* Position relative to viewport, not slide */
+  body.presenter .my-fixed-element {
+    position: fixed;
+    transform: none;
+    /* You may need to adjust for zoom level */
+  }
+
+=== Gotcha: Z-Index in Presenter View
+
+The presenter view has specific z-index layers:
+
+  Layer              Z-Index         Elements
+  ----------------------------------------------------------------
+  Maximum            2147483647      Footer, popups, sidebar
+  Overlay            99999           Navigation hover, modals
+  Toolbar            3               Topbar, sidebar
+  Content            default         Slides
+
+Custom overlays may need explicit z-index to appear correctly.
+
+=== Gotcha: Mermaid Diagram Fonts
+
+Mermaid diagrams use fixed 16px fonts to prevent scaling issues:
+
+  div.mermaid,
+  div.mermaid * {
+    font-size: 16px !important;
+  }
+
+If you need different mermaid font sizes, override carefully and test in
+both audience and presenter views.
+
+=== Gotcha: Swiper Transitions and 3D Effects
+
+Swiper 3D effects (+cube+, +flip+, +coverflow+) require special handling:
+
+  #preso.swiper-cube,
+  #preso.swiper-flip {
+    overflow: visible;
+  }
+
+Content may clip if slides have +overflow: hidden+.
+
+=== Gotcha: jQuery UI Widget Styling
+
+The presenter view uses jQuery UI for dialogs and progress bars. Custom themes
+may need to override jQuery UI classes:
+
+  .ui-dialog.ui-widget-content {
+    border: none;
+    box-shadow: 0 0 25px rgba(0,0,0,0.35);
+  }
+
+  .ui-progressbar-value {
+    background: #your-brand-color;
+  }
+
+=== Gotcha: Mobile Responsive Breakpoints
+
+Showoff has several responsive breakpoints:
+
+  max-width: 320px    Tiny mobile (minimal UI)
+  max-width: 640px    Portrait mobile (sidebar hidden)
+  max-width: 880px    Hide stats/print links
+  max-width: 1024px   Hide toolbar icons
+  pointer: coarse     Touch devices (show button nav)
+
+Test custom styles at these breakpoints, especially in presenter view.
+
+== Complete Class Reference
+
+=== Body Classes
+
+  presenter       Presenter view mode
+  floating        Floating window mode
+  floating.next   Floating next slide window
+  floating.notes  Floating notes window
+  stats           Stats page
+
+=== Slide Type Classes
+
+  slide           Base slide class
+  title-slide     Title/opening slide
+  subsection      Section divider
+  cover           Cover slide (no TOC entry)
+  toc             Exclude from TOC
+
+=== Content Layout Classes
+
+  content         Content wrapper
+  center          Vertically centered
+  full-page       Full-bleed background
+  bullets         Large bullets layout
+  smbullets       Small bullets layout
+  bigtext         Auto-scaling text
+
+=== Typography Classes
+
+  small           80% size
+  smaller         70% size
+  command         Monospace headings
+  code            Monospace content
+
+=== Behavior Classes
+
+  incremental     Step-through content
+  hidden          Hidden (incremental child)
+  autoplay        Auto-play media
+  execute         Executable code
+  activity        Activity tracking
+
+=== Code Classes
+
+  highlight       Code block wrapper
+  language-X      Language identifier
+  numbers         Line numbers enabled
+  executing       Currently executing
+  code_wrap       Word wrap enabled
+  nochrome        No window decoration
+  highlightedLine Highlighted line
+
+=== Callout Classes
+
+  callout         Base callout
+  info            Info icon
+  warning         Warning icon
+  question        Question icon
+  exercise        Exercise icon
+  stop            Stop icon
+  thumbsup        Thumbs up icon
+  conversation    Speech bubble icon
+  glossary        Book icon
+  terminal        Terminal icon
+
+=== Form Classes
+
+  form            Form container
+  element         Form element
+  question        Question label
+  response        Response area
+  correct         Correct answer
+  incorrect       Wrong answer
+  tools           Form buttons
+  dirty           Unsaved changes
+  rendered        Results display
+
+=== UI Classes
+
+  submenu         Collapsible menu
+  navSection      Navigation section
+  navItem         Navigation item
+  highlighted     Highlighted state
+  disabled        Disabled state
+  thumb           Thumbnail container
+  label           Thumbnail label
+
+=== Presenter-Specific Classes
+
+  desktop         Desktop only
+  mobile          Mobile only
+  no-mobile       Hide on mobile
+  intervalHalf    Timer at 50%
+  intervalQuarter Timer at 25%
+  intervalWarning Timer warning
+  intervalCritical Timer critical
+
+=== Print Classes
+
+  pagebreak       Force page break
+  printonly       Print only
+  noprint         Screen only
+  supplemental    Supplemental content
+
+== Related Documentation
+
+- AUTHORING.rdoc - Slide syntax and content creation
+- PRESENTATION.rdoc - Configuration options
+- INTERACTION.rdoc - Forms and audience interaction
+- FEATURE_CSS_CUSTOM_PROPERTIES.rdoc - Future theming system (proposed)
+
+== Version History
+
+- 0.24.1 - Added presenter view scaling fixes, mermaid rendering improvements
+- 0.24.0 - Swiper integration, new transition effects

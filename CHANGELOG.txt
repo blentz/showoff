@@ -1,3 +1,23 @@
+0.24.1
+  * Fixed presenter view scaling for all layouts (default, beside, thumbnail)
+  * Fixed mermaid diagram text clipping in presenter view
+    - Temporarily removes CSS transform during mermaid rendering
+    - Uses double requestAnimationFrame for reliable text measurement
+  * Fixed thumbnail layout positioning with explicit top/left calculation
+  * Added fixed slide dimensions for presenter view zoom calculations
+  * Custom CSS/JS files from showoff.json now load in presenter view
+  * Fixed mermaid font sizing to prevent viewport-relative issues
+  * Added comprehensive STYLING_GUIDE.rdoc documentation
+    - Complete CSS class and ID reference
+    - Tips for custom themes and branding
+    - Gotchas for transform scaling, z-index, and responsive breakpoints
+
+0.24.0
+  * Swiper integration for slide transitions
+  * New transition effects: cube, flip, coverflow, cards, creative
+  * Per-slide transition overrides with transition=X syntax
+  * Improved touch/swipe navigation
+
 0.23.0
   * BREAKING: Legacy server architecture removed
   * Removed Test::Unit tests and test directory
@@ -18,7 +38,7 @@ The codebase is now fully modular with clean separation of concerns.
   * All functionality verified equivalent between architectures
   * Preparation for legacy code removal in v0.23.0
 
-0.22.0
+0.21.0
   * NEW: Modular server architecture is now the DEFAULT
   * The `showoff serve` command now uses the new architecture by default
   * Legacy server available via `SHOWOFF_USE_LEGACY_SERVER=true` (deprecated)

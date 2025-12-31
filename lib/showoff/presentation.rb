@@ -76,6 +76,47 @@ class Showoff::Presentation
     end
   end
 
+  # Reload all sections from disk
+  # Called when hot reload detects file changes
+  #
+  # @param pres_dir [String] Presentation directory (required for correct file paths)
+  def reload_sections(pres_dir = nil)
+    # Use provided pres_dir or fall back to Showoff::Config.root
+    pres_dir ||= Showoff::Config.root || Dir.pwd
+
+    begin
+      # Must chdir to presentation directory for correct file path resolution
+      Dir.chdir(pres_dir) do
+        # First, reload the config file (showoff.json) to pick up any changes
+        config_file = File.join(pres_dir, 'showoff.json')
+        Showoff::Config.load(config_file)
+
+        # Update presentation metadata from reloaded config
+        @title = Showoff::Config.get('name') || I18n.t('name') rescue 'Untitled Presentation'
+        @favicon = Showoff::Config.get('favicon') || 'favicon.ico'
+        @feedback = Showoff::Config.get('feedback')
+        @pause_msg = Showoff::Config.get('pause_msg')
+        @highlightStyle = Showoff::Config.get('highlight') || 'default'
+
+        # Now reload sections with fresh config
+        sections = Showoff::Config.sections
+        if sections.nil? || sections.empty?
+          Showoff::Logger.warn "No sections found in config. Using current directory."
+          sections = {'.': ['.']}
+        end
+
+        @sections = sections.map do |name, files|
+          Showoff::Presentation::Section.new(name, files || ['.'])
+        end
+
+        Showoff::Logger.info "Reloaded #{@sections.size} sections from disk"
+      end
+    rescue => e
+      Showoff::Logger.error "Error reloading sections: #{e.message}"
+      Showoff::Logger.debug e.backtrace.join("\n") if e.backtrace
+    end
+  end
+
   def compile
     Showoff::State.reset([:slide_count, :section_major, :section_minor])
 

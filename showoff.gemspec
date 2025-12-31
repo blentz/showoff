@@ -37,6 +37,7 @@ Gem::Specification.new do |s|
   s.add_dependency      "faye-websocket",    "~> 0.12"
   s.add_dependency      "puma",              ">= 6.6", "< 8.0"
   s.add_dependency      "tilt",              "~> 2.6"
+  s.add_dependency      "listen",            "~> 3.9"
   s.description       = <<-desc
   Showoff is a Sinatra web app that reads simple configuration files for a
   presentation.  It is sort of like a Keynote web app engine.  I am using it

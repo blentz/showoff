@@ -3,7 +3,7 @@
 # Purpose: Run RSpec tests in an isolated container environment with all test dependencies
 #
 # Build:
-#   podman build -t showoff:test -f Containerfile.test .
+#   podman build -t showoff:test -f Containerfile.test --ignorefile .dockerignore.test .
 #
 # Run tests (default: unit tests for server):
 #   podman run --rm showoff:test
@@ -61,6 +61,7 @@ RUN bundle install && \
     bundler-audit update
 
 # Copy the rest of the application
+# NOTE: Use .dockerignore.test when building to include spec/ directory
 COPY . .
 
 # NOTE: We keep build dependencies for test environment

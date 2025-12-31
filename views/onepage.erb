@@ -43,7 +43,24 @@
   <script type="text/javascript">
     // Initialize mermaid before document ready
     console.log('[MERMAID DEBUG] Initializing mermaid library');
-    mermaid.initialize({startOnLoad:false});
+    // Configure mermaid for print - limit diagram width to fit on page
+    mermaid.initialize({
+      startOnLoad: false,
+      maxTextSize: 50000,
+      flowchart: {
+        useMaxWidth: true,
+        htmlLabels: true
+      },
+      sequence: {
+        useMaxWidth: true
+      },
+      gantt: {
+        useMaxWidth: true
+      },
+      pie: {
+        useMaxWidth: true
+      }
+    });
 
     $(document).ready(function() {
       console.log('[MERMAID DEBUG] Document ready fired');
@@ -81,8 +98,39 @@
         $(this).parent().replaceWith(div);
       });
       console.log('[MERMAID DEBUG] After transformation, div.mermaid count:', $('div.mermaid').length);
-      mermaid.init(undefined, $("div.mermaid"));
-      console.log('[MERMAID DEBUG] mermaid.init() called');
+      // Use mermaid.run() (v10+) instead of deprecated mermaid.init()
+      mermaid.run({
+        nodes: document.querySelectorAll('div.mermaid'),
+        suppressErrors: false
+      }).then(function() {
+        console.log('[MERMAID DEBUG] mermaid.run() completed');
+        // Fix mermaid SVG scaling for print - force diagrams to fit container width
+        var containerWidth = document.querySelector('.slide .content')?.offsetWidth || 960;
+        document.querySelectorAll('div.mermaid svg').forEach(function(svg) {
+          // Get original viewBox dimensions
+          var viewBox = svg.getAttribute('viewBox');
+          if (viewBox) {
+            var parts = viewBox.split(' ').map(parseFloat);
+            var vbWidth = parts[2];
+            var vbHeight = parts[3];
+
+            // If diagram is wider than container, we need to scale
+            if (vbWidth > containerWidth) {
+              console.log('[MERMAID DEBUG] Scaling SVG', svg.id, 'from', vbWidth, 'to fit', containerWidth);
+            }
+          }
+
+          // Force the SVG to fill container width and scale proportionally
+          svg.style.maxWidth = '100%';
+          svg.style.width = '100%';
+          svg.style.height = 'auto';
+          svg.removeAttribute('height'); // Remove fixed height if present
+
+          console.log('[MERMAID DEBUG] Fixed SVG scaling for:', svg.id);
+        });
+      }).catch(function(err) {
+        console.error('[MERMAID DEBUG] mermaid.run() error:', err);
+      });
       $('.content.bigtext').bigtext();
 
       // translate SVG images, inlining them first if needed.
@@ -95,7 +143,7 @@
 
 </head>
 
-<body>
+<body class="onepage">
 <div id="slides"<% if @wrapper_classes then %>class="<%= @wrapper_classes.join(' ') %>"<% end %> >
   <%= @slides %>
 </div>

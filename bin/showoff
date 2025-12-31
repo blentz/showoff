@@ -329,6 +329,13 @@ EOS
     c.desc 'Disable content caching'
     c.switch :nocache
 
+    c.desc 'Enable hot reload (auto-refresh browser on file changes)'
+    c.switch [:H, :hot_reload, :'hot-reload']
+
+    c.desc 'Use native filesystem events instead of polling for hot reload'
+    c.long_desc 'By default, hot reload uses polling which works reliably in containers. Native mode is faster but may not work with volume mounts.'
+    c.switch [:hot_reload_native, :'hot-reload-native']
+
     c.desc 'Prevent the computer from sleeping during your presentation'
     c.switch :nosleep
 
@@ -430,6 +437,8 @@ EOS
           review: options[:r] || options[:review] || false,
           standalone: options[:S] || options[:standalone] || false,
           nocache: options[:nocache] || false,
+          hot_reload: options[:H] || options[:hot_reload] || options[:'hot-reload'] || false,
+          hot_reload_native: options[:hot_reload_native] || options[:'hot-reload-native'] || false,
           bind: options[:bind] || options[:host] || options[:h] || '0.0.0.0',
           port: options[:p] || options[:port] || 9090
         }
@@ -446,11 +455,23 @@ EOS
             Showoff::Server.set :review, normalized_options[:review]
             Showoff::Server.set :standalone, normalized_options[:standalone]
             Showoff::Server.set :nocache, normalized_options[:nocache]
+            Showoff::Server.set :hot_reload, normalized_options[:hot_reload]
+            Showoff::Server.set :hot_reload_native, normalized_options[:hot_reload_native]
 
             # Configure SSL if needed
             if options[:ssl]
               Showoff::Server.set :ssl, true
               Showoff::Server.set :ssl_options, ssl_options
+            end
+
+            # Start hot reload file watcher if enabled
+            if normalized_options[:hot_reload]
+              puts "**** Hot Reload enabled. Watching for file changes... ****"
+              puts
+              Showoff::Server.start_file_watcher(
+                pres_dir: normalized_options[:pres_dir],
+                hot_reload_native: normalized_options[:hot_reload_native]
+              )
             end
 
             # Run the server using class method
@@ -469,11 +490,23 @@ EOS
           Showoff::Server.set :review, normalized_options[:review]
           Showoff::Server.set :standalone, normalized_options[:standalone]
           Showoff::Server.set :nocache, normalized_options[:nocache]
+          Showoff::Server.set :hot_reload, normalized_options[:hot_reload]
+          Showoff::Server.set :hot_reload_native, normalized_options[:hot_reload_native]
 
           # Configure SSL if needed
           if options[:ssl]
             Showoff::Server.set :ssl, true
             Showoff::Server.set :ssl_options, ssl_options
+          end
+
+          # Start hot reload file watcher if enabled
+          if normalized_options[:hot_reload]
+            puts "**** Hot Reload enabled. Watching for file changes... ****"
+            puts
+            Showoff::Server.start_file_watcher(
+              pres_dir: normalized_options[:pres_dir],
+              hot_reload_native: normalized_options[:hot_reload_native]
+            )
           end
 
           # Run the server using class method

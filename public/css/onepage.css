@@ -1,3 +1,75 @@
+/* Onepage/Print mode overrides - must use !important to override theme styles */
+body.onepage {
+  width: auto !important;
+  height: auto !important;
+  overflow: scroll !important;
+  overflow-x: auto !important;
+  overflow-y: scroll !important;
+}
+
+body.onepage #slides {
+  width: auto !important;
+  height: auto !important;
+  min-height: auto !important;
+  max-height: none !important;
+  overflow: visible !important;
+}
+
+body.onepage .slide {
+  width: 1020px !important;
+  height: 740px !important;
+  min-width: 1020px !important;
+  max-width: 1020px !important;
+  min-height: 740px !important;
+  max-height: 740px !important;
+  margin: 10px auto !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  position: relative !important;
+  border: 1px solid #333 !important;
+  page-break-after: always;
+}
+
+body.onepage .slide .content {
+  width: calc(1020px - 60px) !important;
+  height: calc(740px - 80px) !important;
+  max-width: none !important;
+  max-height: none !important;
+  overflow: hidden !important;
+}
+
+/* Screen styles for notes mode - allow slides to expand */
+body.onepage #slides.print-notes .slide {
+  height: auto !important;
+  min-height: 740px !important;
+  max-height: none !important;
+  overflow: visible !important;
+}
+
+body.onepage #slides.print-notes .slide .content {
+  height: auto !important;
+  min-height: 500px !important;
+  max-height: none !important;
+  overflow: visible !important;
+}
+
+/* Show notes sections when in print-notes mode */
+body.onepage #slides.print-notes .notes-section {
+  display: block !important;
+  margin: 20px 30px !important;
+  padding: 15px 20px !important;
+  background: #f8f8f8 !important;
+  border-left: 4px solid #666 !important;
+  font-size: 0.95em !important;
+}
+
+body.onepage #slides.print-notes .notes-section h1 {
+  font-size: 1.1em !important;
+  margin: 0 0 10px 0 !important;
+  color: #555 !important;
+  border-bottom: none !important;
+}
+
 /* Screen */
 @media screen {
   body {
@@ -19,24 +91,171 @@
   }
 }
 
-/* Print */
+/* Print - for PDF export via browser print dialog */
 @media print {
+  /* US Letter landscape: 11in x 8.5in = 792pt x 612pt */
+  @page {
+    size: 11in 8.5in landscape;
+    margin: 0.5in;  /* Move padding from slides to page margins */
+  }
+
+  html, body {
+    width: 11in !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    background: white !important;
+  }
+
+  body.onepage {
+    overflow: visible !important;
+  }
+
+  body.onepage #slides {
+    width: 11in !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  /* Each slide = exactly one page - let browser handle page sizing */
+  /* Use highly specific selectors to override any theme styles */
+  body.onepage #slides .slide,
+  body.onepage .slide,
+  #slides .slide,
   .slide, .preso {
-      margin: 10px;
-      padding: 0;
-      width: 800px;
-      min-height: 600px;
-      /* Allow slides to expand for notes content, but no overflow clipping */
-      border: none;
-      position: relative;
-      /* Legacy page break properties for older browsers */
-      page-break-before: auto;
-      page-break-after: always;
-      page-break-inside: avoid;
-      /* Modern CSS fragmentation properties */
-      break-before: auto;
-      break-after: page;
-      break-inside: avoid;
+    width: 100% !important;
+    height: 7.5in !important;  /* 8.5in - 1in total margins = 7.5in content height */
+    min-width: auto !important;
+    max-width: 100% !important;
+    min-height: 7.5in !important;
+    max-height: 7.5in !important;
+    margin: 0 !important;
+    padding: 0 !important;  /* Padding now handled by @page margin */
+    border: none !important;
+    position: relative !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
+    /* Disable page-break-after to prevent blank pages - use page-break-before instead */
+    page-break-after: auto !important;
+    break-after: auto !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  /* Use page-break-before on all slides except first to avoid trailing blank page */
+  body.onepage #slides .slide ~ .slide,
+  body.onepage .slide ~ .slide,
+  #slides .slide ~ .slide,
+  .slide ~ .slide {
+    page-break-before: always !important;
+    break-before: page !important;
+  }
+
+  body.onepage .slide .content,
+  .slide .content {
+    width: auto !important;
+    height: auto !important;
+    max-width: 100% !important;
+    max-height: 6.5in !important;  /* Leave room for padding */
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;  /* Changed from visible to hidden */
+  }
+
+  /* Mermaid diagrams need special handling - must be constrained to page size
+     to prevent overlapping onto adjacent slides */
+  body.onepage .slide:has(.mermaid),
+  .slide:has(.mermaid) {
+    overflow: hidden !important;
+  }
+
+  body.onepage .slide:has(.mermaid) .content,
+  .slide:has(.mermaid) .content {
+    overflow: hidden !important;
+    max-height: 7in !important;
+  }
+
+  body.onepage div.mermaid,
+  div.mermaid {
+    display: block !important;
+    overflow: hidden !important;
+    max-width: 100% !important;
+    max-height: 6.5in !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  body.onepage div.mermaid svg,
+  div.mermaid svg,
+  div.mermaid svg[style] {
+    display: block !important;
+    /* Override mermaid's inline max-width style - force scaling to container */
+    max-width: 100% !important;
+    width: 100% !important;
+    max-height: 6in !important;
+    height: auto !important;
+    overflow: visible !important;
+    /* Preserve aspect ratio but allow scaling */
+    object-fit: contain !important;
+  }
+
+  /* Mermaid container should allow SVG to scale */
+  body.onepage div.mermaid,
+  div.mermaid {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow: visible !important;
+  }
+
+  /* Hide screen-only elements */
+  body.onepage .slide::before,
+  body.onepage .slide::after {
+    display: none !important;
+  }
+
+  /* Print with notes - allow slides to expand for notes content */
+  body.onepage #slides.print-notes .slide {
+    height: auto !important;
+    min-height: 8.5in !important;
+    max-height: none !important;
+    overflow: visible !important;
+    padding-bottom: 0.5in !important;
+    /* Notes may cause content to span pages */
+    page-break-inside: auto;
+    break-inside: auto;
+  }
+
+  body.onepage #slides.print-notes .slide ~ .slide {
+    page-break-before: always;
+    break-before: page;
+  }
+
+  body.onepage #slides.print-notes .slide .content {
+    height: auto !important;
+    min-height: 5in !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  /* Style the notes section for print */
+  body.onepage #slides.print-notes .notes-section {
+    display: block !important;
+    margin-top: 0.25in !important;
+    padding: 0.15in 0.25in !important;
+    background: #f5f5f5 !important;
+    border-left: 4px solid #666 !important;
+    font-size: 0.9em !important;
+    color: #333 !important;
+    page-break-before: avoid;
+    break-before: avoid;
+  }
+
+  body.onepage #slides.print-notes .notes-section h1 {
+    font-size: 1.1em !important;
+    margin: 0 0 0.1in 0 !important;
+    color: #444 !important;
   }
 }
 

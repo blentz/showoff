@@ -335,7 +335,10 @@ function initializePresentation() {
 	if (slidesLoaded) {
 		showSlide()
 	} else {
-		showFirstSlide();
+		// Check if we're restoring from a hot reload
+		if (!restorePositionAfterReload()) {
+			showFirstSlide();
+		}
 		slidesLoaded = true
 	}
 	setupSlideParamsCheck();
@@ -1570,12 +1573,95 @@ function parseMessage(data) {
         annotations[setting] = value;
         break;
 
+      case 'reload':
+        handleHotReload(command);
+        break;
+
     }
   }
   catch(e) {
     console.log("Not a presenter! " + e);
   }
 
+}
+
+// Hot Reload Support
+// Handles reload messages from the server when presentation files change.
+// Supports CSS-only hot swap (no page reload) and full reload with position preservation.
+
+function handleHotReload(command) {
+  var reloadType = command['reload_type'] || 'full';
+  var files = command['files'] || [];
+
+  console.log('[Hot Reload] ' + reloadType + ' reload triggered by: ' + files.join(', '));
+
+  if (reloadType === 'css') {
+    // CSS-only hot swap - no page reload needed
+    reloadStylesheets();
+  } else {
+    // Full reload - save position first
+    savePositionAndReload();
+  }
+}
+
+function reloadStylesheets() {
+  // Reload all local stylesheets by cache-busting their URLs
+  var links = document.querySelectorAll('link[rel="stylesheet"]');
+  var timestamp = Date.now();
+
+  links.forEach(function(link) {
+    var href = link.getAttribute('href');
+    if (href && !href.includes('//')) {
+      // Only reload local stylesheets (not CDN)
+      var newHref = href.split('?')[0] + '?v=' + timestamp;
+      link.setAttribute('href', newHref);
+    }
+  });
+
+  console.log('[Hot Reload] Stylesheets reloaded');
+}
+
+function savePositionAndReload() {
+  // Save current slide position to sessionStorage
+  var position = {
+    slide: slidenum,
+    increment: incrCurr
+  };
+
+  try {
+    sessionStorage.setItem('showoff_reload_position', JSON.stringify(position));
+    console.log('[Hot Reload] Saved position: slide ' + slidenum + ', increment ' + incrCurr);
+  } catch (e) {
+    console.warn('[Hot Reload] Failed to save position: ' + e);
+  }
+
+  // Reload the page
+  location.reload();
+}
+
+function restorePositionAfterReload() {
+  // Check if we're coming back from a hot reload
+  try {
+    var savedPosition = sessionStorage.getItem('showoff_reload_position');
+    if (savedPosition) {
+      sessionStorage.removeItem('showoff_reload_position');
+      var position = JSON.parse(savedPosition);
+
+      console.log('[Hot Reload] Restoring position: slide ' + position.slide + ', increment ' + position.increment);
+
+      // Wait for slides to be fully loaded, then navigate
+      // Use a small delay to ensure Swiper is initialized
+      setTimeout(function() {
+        gotoSlide(position.slide, position.increment);
+      }, 200);
+
+      return true;
+    }
+  } catch (e) {
+    console.warn('[Hot Reload] Failed to restore position: ' + e);
+  }
+
+  return false;
 }
 
 function sendPace(pace) {

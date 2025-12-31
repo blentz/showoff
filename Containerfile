@@ -63,4 +63,4 @@ EXPOSE 54321
 ENV PATH="/showoff/bin:${PATH}"
 
 ENTRYPOINT ["showoff"]
-CMD ["serve", "--host", "0.0.0.0", "--port", "54321"]
+CMD ["serve", "--host", "0.0.0.0", "--port", "54321", "--hot-reload"]

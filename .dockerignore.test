@@ -1,0 +1,19 @@
+# .dockerignore for test container builds
+# Use with: podman build --ignorefile .dockerignore.test -f Containerfile.test .
+
+# Exclude presentations - these are mounted at runtime
+presentations/
+
+# NOTE: spec/ and test/ are NOT excluded - we need them for tests!
+
+# Exclude git and CI
+.git/
+.github/
+
+# Exclude documentation (not needed for tests)
+documentation/
+*.md
+!README.md
+
+# Exclude example presentations
+example/

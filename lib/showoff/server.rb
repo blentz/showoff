@@ -23,6 +23,7 @@ require 'showoff/server/download_manager'
 require 'showoff/server/execution_manager'
 require 'showoff/server/websocket_manager'
 require 'showoff/server/feedback_manager'
+require 'showoff/server/file_watcher'
 
 # Modular Sinatra server for Showoff presentations.
 #
@@ -42,12 +43,16 @@ class Showoff::Server
   # @option options [Boolean] :execute Enable code execution
   # @option options [String] :host Bind host (default: localhost)
   # @option options [Integer] :port Port number (default: 9090)
+  # @option options [Boolean] :hot_reload Enable hot reload (auto-refresh on file changes)
+  # @option options [Boolean] :hot_reload_native Use native FS events instead of polling
   def initialize(options = {})
     @options = {
       pres_dir: Dir.pwd,
       pres_file: 'showoff.json',
       verbose: false,
       execute: false,
+      hot_reload: false,
+      hot_reload_native: false,
       port: 9090
     }.merge(options)
 
@@ -143,11 +148,118 @@ end
     @websocket_manager ||= WebSocketManager.new(
       session_state: sessions,
       stats_manager: stats,
-      download_manager: download_manager,
       logger: logger,
       current_slide_callback: -> { settings.showoff_config['@@current'] },
       downloads_callback: -> { settings.showoff_config['@@downloads'] }
     )
+  end
+
+  # Class-level shared state for hot reload functionality
+  # Must be class-level because Sinatra creates new instances per request
+  class << self
+    attr_accessor :file_watcher_instance
+    attr_accessor :presentation_instance  # Shared presentation object
+
+    # Flag indicating presentation needs to be reloaded from disk
+    def needs_reload?
+      @needs_reload || false
+    end
+
+    def needs_reload=(value)
+      @needs_reload = value
+    end
+
+    # Class-level slide cache - shared across all request instances
+    # This is the cache that FileWatcher clears on file changes
+    def slide_cache
+      @slide_cache ||= CacheManager.new
+    end
+
+    # Clear the slide cache and mark presentation for reload
+    # Called by FileWatcher on file changes
+    def clear_slide_cache
+      @slide_cache&.clear
+      @needs_reload = true
+    end
+
+    # Start the file watcher for hot reload
+    # Should be called before run! when hot_reload is enabled
+    #
+    # @param options [Hash] Hot reload options
+    # @option options [String] :pres_dir Presentation directory to watch
+    # @option options [Boolean] :hot_reload_native Use native FS events instead of polling
+    # @return [void]
+    def start_file_watcher(options = {})
+      return if @file_watcher_instance&.running?
+
+      force_polling = !options[:hot_reload_native]
+      pres_dir = options[:pres_dir] || settings.pres_dir || Dir.pwd
+
+      # Create a minimal websocket manager proxy for broadcasting
+      # The actual websocket_manager is per-instance, but we need class-level broadcasting
+      @file_watcher_ws_proxy ||= FileWatcherWebSocketProxy.new
+
+      @file_watcher_instance = FileWatcher.new(
+        root_dir: pres_dir,
+        websocket_manager: @file_watcher_ws_proxy,
+        cache_manager: slide_cache,  # Use the class-level slide cache
+        logger: Logger.new($stdout),
+        force_polling: force_polling
+      )
+
+      @file_watcher_instance.start
+
+      # Register cleanup on exit
+      at_exit { stop_file_watcher }
+    end
+
+    # Stop the file watcher
+    def stop_file_watcher
+      @file_watcher_instance&.stop
+      @file_watcher_instance = nil
+    end
+
+    # Register a websocket connection for hot reload broadcasts
+    def register_hot_reload_connection(ws)
+      @file_watcher_ws_proxy&.add_connection(ws)
+    end
+
+    # Unregister a websocket connection
+    def unregister_hot_reload_connection(ws)
+      @file_watcher_ws_proxy&.remove_connection(ws)
+    end
+  end
+
+  # Minimal WebSocket proxy for file watcher broadcasts
+  # This collects WebSocket connections and broadcasts to all of them
+  class FileWatcherWebSocketProxy
+    def initialize
+      @connections = []
+      @mutex = Mutex.new
+    end
+
+    def add_connection(ws)
+      @mutex.synchronize { @connections << ws unless @connections.include?(ws) }
+    end
+
+    def remove_connection(ws)
+      @mutex.synchronize { @connections.delete(ws) }
+    end
+
+    def connection_count
+      @mutex.synchronize { @connections.size }
+    end
+
+    def broadcast_to_all(message_hash)
+      connections = @mutex.synchronize { @connections.dup }
+      connections.each do |ws|
+        begin
+          ws.send(message_hash.to_json)
+        rescue => e
+          # Connection may be dead, ignore
+        end
+      end
+    end
   end
 
   # Configure Sinatra settings
@@ -263,6 +375,15 @@ end
       languages[fallback]
     end
 
+    # Check if presentation needs to be reloaded from disk (hot reload)
+    # Call this at the start of routes that need fresh presentation data
+    def check_hot_reload
+      if Showoff::Server.needs_reload?
+        @presentation.reload_sections(settings.pres_dir)
+        Showoff::Server.needs_reload = false
+      end
+    end
+
     # Helper for managing client cookies
     def manage_client_cookies(presenter=false)
       # Generate or retrieve client ID
@@ -284,6 +405,9 @@ end
   # Root route - presentation index
   get '/' do
     begin
+      # Check if presentation needs to be reloaded from disk (hot reload)
+      check_hot_reload
+
       # Set variables needed by the template
       @title = @presentation.title
       @favicon = nil
@@ -343,6 +467,9 @@ end
   # Renders the presenter view with speaker notes, next slide preview, and presenter controls
   get '/presenter' do
     begin
+      # Check if presentation needs to be reloaded from disk (hot reload)
+      check_hot_reload
+
       # Set variables needed by the template
       @title = @presentation.title
       @favicon = settings.showoff_config['favicon']
@@ -596,6 +723,11 @@ end
       @css_files = (Showoff::Config.get('styles') || []).map { |f| "file/#{f}" }
       @js_files = (Showoff::Config.get('scripts') || []).map { |f| "file/#{f}" }
 
+      # Set wrapper classes for print mode (used by onepage.erb for CSS targeting)
+      # e.g., 'notes' section adds 'print-notes' class for expanded slide heights
+      @wrapper_classes = []
+      @wrapper_classes << "print-#{section}" if section
+
       # Render the onepage template
       content_type 'text/html'
       erb :onepage
@@ -758,16 +890,27 @@ end
   # Used by AJAX requests from the client-side JavaScript
   get '/slides' do
     begin
+      # Prevent browser caching - content may change at any time
+      headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+      headers['Pragma'] = 'no-cache'
+      headers['Expires'] = '0'
+
+      # Use class-level cache (shared across requests, cleared by FileWatcher)
+      slide_cache = Showoff::Server.slide_cache
+
       # Log cache status if logger is available
-      logger&.info "Cached presentations: #{cache.keys}"
+      logger&.info "Cached presentations: #{slide_cache.keys}"
 
       # Get locale from cookies
       @locale = locale(request.cookies['locale'])
 
+      # Check if presentation needs to be reloaded from disk (hot reload)
+      check_hot_reload
+
       # Check if we have a cache and we're not asking to invalidate it
-      if cache.key?(@locale) && params['cache'] != 'clear'
+      if slide_cache.key?(@locale) && params['cache'] != 'clear'
         logger&.info "Using cached slides for locale: #{@locale}"
-        return cache.get(@locale)
+        return slide_cache.get(@locale)
       end
 
       # Log that we're generating new content
@@ -786,7 +929,7 @@ end
       end
 
       # Cache the content unless nocache is set
-      cache.set(@locale, content) unless settings.respond_to?(:nocache) && settings.nocache
+      slide_cache.set(@locale, content) unless settings.respond_to?(:nocache) && settings.nocache
 
       # Return the content
       content
@@ -860,8 +1003,9 @@ end
 
   # WebSocket endpoint for real-time presenter/audience sync
   get '/control' do
-    # Check if WebSocket support is enabled
-    return nil unless settings.showoff_config[:interactive]
+    # Check if WebSocket support is enabled (standalone mode disables it)
+    # Note: @interactive comes from Presentation, settings.standalone from CLI
+    return nil if settings.respond_to?(:standalone) && settings.standalone
 
     # Require WebSocket upgrade
     raise Sinatra::NotFound unless Faye::WebSocket.websocket?(request.env)
@@ -872,7 +1016,7 @@ end
     # On connection open
     ws.on :open do |event|
       # Send current slide position to new client
-      current = websocket_manager.send(:current_slide_callback).call || {}
+      current = settings.showoff_config['@@current'] || {}
       ws.send({ 'message' => 'current', 'current' => current[:number] }.to_json)
 
       # Add connection to manager
@@ -880,6 +1024,9 @@ end
       session_id = session.id rescue 'unknown'
       remote = request.env['REMOTE_HOST'] || request.env['REMOTE_ADDR']
       websocket_manager.add_connection(ws, client_id, session_id, remote)
+
+      # Register for hot reload broadcasts
+      Showoff::Server.register_hot_reload_connection(ws)
 
       logger&.warn "Open WebSocket connections: #{websocket_manager.connection_count}"
     end
@@ -902,6 +1049,9 @@ end
     ws.on :close do |event|
       logger&.warn "WebSocket closed"
       websocket_manager.remove_connection(ws)
+
+      # Unregister from hot reload broadcasts
+      Showoff::Server.unregister_hot_reload_connection(ws)
     end
 
     # Return async Rack response

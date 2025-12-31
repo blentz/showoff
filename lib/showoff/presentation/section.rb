@@ -51,7 +51,7 @@ class Showoff::Presentation::Section
       content = content.gsub(/^# /m, "<!SLIDE>\n# ")
     end
 
-    slides = content.split(/^<?!SLIDE\s?([^\n>]*)>?/)
+    slides = content.split(/^<?!SLIDE[ \t]?([^\n>]*)>?/)
     slides.shift # has an extra empty string because the regex matches the entire source string.
 
     # this is a counter keeping track of how many slides came from the file.

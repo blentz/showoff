@@ -314,8 +314,8 @@ RSpec.describe 'Showoff::Server Routes', type: :request do
       # Store the original content for comparison
       original_content = last_response.body
 
-      # Mock the cache to verify it's used on second request
-      allow(server.cache).to receive(:get).with('en').and_return('Cached content')
+      # Mock the class-level slide_cache to verify it's used on second request
+      allow(Showoff::Server.slide_cache).to receive(:get).with('en').and_return('Cached content')
 
       get '/slides'
       expect(last_response.body).to eq('Cached content')
@@ -327,15 +327,15 @@ RSpec.describe 'Showoff::Server Routes', type: :request do
       expect(last_response.status).to eq(200)
 
       # Should not use cache when cache=clear
-      expect(server.cache).to receive(:set).with('en', anything)
+      expect(Showoff::Server.slide_cache).to receive(:set).with('en', anything)
 
       get '/slides?cache=clear'
       expect(last_response.status).to eq(200)
     end
 
     it 'handles errors gracefully' do
-      # Mock cache to raise an error
-      allow(server.cache).to receive(:key?).and_raise(StandardError.new('Test error'))
+      # Mock class-level slide_cache to raise an error
+      allow(Showoff::Server.slide_cache).to receive(:key?).and_raise(StandardError.new('Test error'))
 
       get '/slides'
       expect(last_response.status).to eq(500)

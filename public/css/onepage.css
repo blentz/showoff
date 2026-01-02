@@ -93,6 +93,10 @@ body.onepage #slides.print-notes .notes-section h1 {
 
 /* Print - for PDF export via browser print dialog */
 @media print {
+  /* ========================================================================
+     SHARED PRINT RULES - Apply to ALL print modes
+     ======================================================================== */
+
   /* US Letter landscape: 11in x 8.5in = 792pt x 612pt */
   @page {
     size: 11in 8.5in landscape;
@@ -118,12 +122,19 @@ body.onepage #slides.print-notes .notes-section h1 {
     overflow: visible !important;
   }
 
-  /* Each slide = exactly one page - let browser handle page sizing */
-  /* Use highly specific selectors to override any theme styles */
-  body.onepage #slides .slide,
-  body.onepage .slide,
-  #slides .slide,
-  .slide, .preso {
+  /* Hide screen-only elements */
+  body.onepage .slide::before,
+  body.onepage .slide::after {
+    display: none !important;
+  }
+
+  /* ========================================================================
+     SLIDES-ONLY MODE (/print)
+     Strict one-slide-per-page layout with constrained diagrams
+     ======================================================================== */
+
+  /* Slides-only mode: Every slide is exactly one page */
+  body.onepage #slides.print-mode:not(.print-notes):not(.print-handouts) .slide {
     width: 100% !important;
     height: 7.5in !important;  /* 8.5in - 1in total margins = 7.5in content height */
     min-width: auto !important;
@@ -131,131 +142,204 @@ body.onepage #slides.print-notes .notes-section h1 {
     min-height: 7.5in !important;
     max-height: 7.5in !important;
     margin: 0 !important;
-    padding: 0 !important;  /* Padding now handled by @page margin */
+    padding: 0 !important;  /* Padding handled by @page margin */
     border: none !important;
     position: relative !important;
     box-sizing: border-box !important;
     overflow: hidden !important;
-    /* Disable page-break-after to prevent blank pages - use page-break-before instead */
     page-break-after: auto !important;
     break-after: auto !important;
     page-break-inside: avoid !important;
     break-inside: avoid !important;
   }
 
-  /* Use page-break-before on all slides except first to avoid trailing blank page */
-  body.onepage #slides .slide ~ .slide,
-  body.onepage .slide ~ .slide,
-  #slides .slide ~ .slide,
-  .slide ~ .slide {
+  /* Slides-only: Force page break before each slide except first */
+  body.onepage #slides.print-mode:not(.print-notes):not(.print-handouts) .slide ~ .slide {
     page-break-before: always !important;
     break-before: page !important;
   }
 
-  body.onepage .slide .content,
-  .slide .content {
+  /* Slides-only: Constrain content to fit on page */
+  body.onepage #slides.print-mode:not(.print-notes):not(.print-handouts) .slide .content {
     width: auto !important;
     height: auto !important;
     max-width: 100% !important;
     max-height: 6.5in !important;  /* Leave room for padding */
     margin: 0 !important;
     padding: 0 !important;
-    overflow: hidden !important;  /* Changed from visible to hidden */
+    overflow: hidden !important;  /* Clip overflowing content */
   }
 
-  /* Mermaid diagrams need special handling - must be constrained to page size
-     to prevent overlapping onto adjacent slides */
-  body.onepage .slide:has(.mermaid),
-  .slide:has(.mermaid) {
+  /* Slides-only: Mermaid diagrams must be constrained to page */
+  body.onepage #slides.print-mode:not(.print-notes):not(.print-handouts) .slide:has(.mermaid),
+  body.onepage #slides.print-mode:not(.print-notes):not(.print-handouts) .slide:has(.mermaid) .content {
     overflow: hidden !important;
   }
 
-  body.onepage .slide:has(.mermaid) .content,
-  .slide:has(.mermaid) .content {
-    overflow: hidden !important;
-    max-height: 7in !important;
-  }
-
-  body.onepage div.mermaid,
-  div.mermaid {
+  body.onepage #slides.print-mode:not(.print-notes):not(.print-handouts) div.mermaid {
     display: block !important;
-    overflow: hidden !important;
+    width: 100% !important;
     max-width: 100% !important;
-    max-height: 6.5in !important;
+    max-height: 6in !important;
+    overflow: hidden !important;
     page-break-inside: avoid !important;
     break-inside: avoid !important;
   }
 
-  body.onepage div.mermaid svg,
-  div.mermaid svg,
-  div.mermaid svg[style] {
+  body.onepage #slides.print-mode:not(.print-notes):not(.print-handouts) div.mermaid svg {
     display: block !important;
-    /* Override mermaid's inline max-width style - force scaling to container */
     max-width: 100% !important;
-    width: 100% !important;
+    width: auto !important;
     max-height: 6in !important;
     height: auto !important;
-    overflow: visible !important;
-    /* Preserve aspect ratio but allow scaling */
-    object-fit: contain !important;
+    overflow: hidden !important;
   }
 
-  /* Mermaid container should allow SVG to scale */
-  body.onepage div.mermaid,
-  div.mermaid {
-    display: block !important;
+  /* ========================================================================
+     NOTES MODE (/print/notes)
+     Flexible layout with slides + notes on separate pages
+     Requirements:
+     1. Slides with H1/title start on a new page
+     2. Presenter notes must be on a SEPARATE page from slide content
+     3. Diagrams use transform scaling and need overflow:visible
+     4. No unintentional blank pages
+     ======================================================================== */
+
+  /* Notes mode: Slides have flexible height */
+  body.onepage #slides.print-mode.print-notes .slide {
     width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    min-width: auto !important;
     max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    position: relative !important;
+    box-sizing: border-box !important;
+    /* Allow natural flow by default */
+    page-break-before: auto !important;
+    break-before: auto !important;
+    page-break-after: auto !important;
+    break-after: auto !important;
     overflow: visible !important;
   }
 
-  /* Hide screen-only elements */
-  body.onepage .slide::before,
-  body.onepage .slide::after {
-    display: none !important;
+  /* Notes mode: Slides with H1 (titles) MUST start on new page */
+  body.onepage #slides.print-mode.print-notes .slide:has(h1) {
+    page-break-before: always !important;
+    break-before: page !important;
   }
 
-  /* Print with notes - allow slides to expand for notes content */
-  body.onepage #slides.print-notes .slide {
+  /* Notes mode: First slide never needs forced break */
+  body.onepage #slides.print-mode.print-notes .slide:first-child {
+    page-break-before: auto !important;
+    break-before: auto !important;
+  }
+
+  /* Notes mode: Slide content - default to keeping together but constrained */
+  body.onepage #slides.print-mode.print-notes .slide .content {
+    width: auto !important;
     height: auto !important;
-    min-height: 8.5in !important;
+    min-height: 0 !important;
+    max-width: 100% !important;
+    max-height: 7in !important;  /* Constrain height for non-diagram slides */
+    margin: 0 !important;
+    padding: 0.25in !important;
+    overflow: hidden !important;  /* Clip by default */
+    page-break-inside: avoid !important;  /* Try to keep content together */
+    break-inside: avoid !important;
+  }
+
+  /* Notes mode: Slides with mermaid diagrams need special handling */
+  body.onepage #slides.print-mode.print-notes .slide:has(.mermaid) .content {
+    max-height: none !important;  /* Remove height constraint */
+    overflow: visible !important;  /* Allow diagrams to extend if needed */
+    /* Allow breaking between header and diagram if needed */
+    page-break-inside: auto !important;
+    break-inside: auto !important;
+  }
+
+  /* Notes mode: H1 within content doesn't force additional breaks */
+  body.onepage #slides.print-mode.print-notes .slide .content h1 {
+    page-break-before: auto !important;
+    break-before: auto !important;
+    /* But avoid breaking immediately after the H1 */
+    page-break-after: avoid !important;
+    break-after: avoid !important;
+  }
+
+  /* Notes mode: Mermaid containers - use CSS sizing (no transform) */
+  body.onepage #slides.print-mode.print-notes div.mermaid {
+    display: block !important;
+    /* JavaScript will set explicit width/height in pixels - no CSS constraints */
+    width: auto !important;
+    max-width: none !important;   /* Let JavaScript control width */
+    max-height: none !important;  /* Let JavaScript control height */
+    overflow: visible !important; /* Allow content to render naturally */
+    /* Keep diagram together - don't break in the middle */
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    /* Add spacing around diagrams */
+    margin: 0.25in 0 !important;
+  }
+
+  /* Notes mode: Mermaid SVGs - JavaScript sets explicit dimensions */
+  body.onepage #slides.print-mode.print-notes div.mermaid svg {
+    display: block !important;
+    /* JavaScript sets explicit pixel dimensions, no constraints needed */
+    max-width: none !important;
+    width: auto !important;
     max-height: none !important;
-    overflow: visible !important;
-    padding-bottom: 0.5in !important;
-    /* Notes may cause content to span pages */
-    page-break-inside: auto;
-    break-inside: auto;
-  }
-
-  body.onepage #slides.print-notes .slide ~ .slide {
-    page-break-before: always;
-    break-before: page;
-  }
-
-  body.onepage #slides.print-notes .slide .content {
     height: auto !important;
-    min-height: 5in !important;
-    max-height: none !important;
-    overflow: visible !important;
   }
 
-  /* Style the notes section for print */
+  /* Constrain mermaid code blocks BEFORE transformation to give mermaid size hints */
+  body.onepage #slides.print-mode pre.highlight {
+    max-width: 620px !important;
+    max-height: 350px !important;
+  }
+
+  /* After transformation, constrain mermaid divs */
+  body.onepage #slides.print-mode div.mermaid {
+    max-width: 620px !important;
+    max-height: 350px !important;
+  }
+
+  /* Notes mode: Notes section MUST be on separate page from slide */
   body.onepage #slides.print-notes .notes-section {
     display: block !important;
-    margin-top: 0.25in !important;
-    padding: 0.15in 0.25in !important;
-    background: #f5f5f5 !important;
+    visibility: visible !important;
+    /* Force page break to ensure notes are separate from slide */
+    page-break-before: always !important;
+    break-before: page !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    /* Style the notes */
+    width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: 7in !important;
+    overflow: hidden !important;
+    padding: 0.25in !important;
+    margin: 0 !important;
+    background: #f9f9f9 !important;
     border-left: 4px solid #666 !important;
     font-size: 0.9em !important;
     color: #333 !important;
-    page-break-before: avoid;
-    break-before: avoid;
   }
 
   body.onepage #slides.print-notes .notes-section h1 {
     font-size: 1.1em !important;
-    margin: 0 0 0.1in 0 !important;
+    margin: 0 0 0.15in 0 !important;
     color: #444 !important;
+    font-weight: bold !important;
+  }
+
+  body.onepage #slides.print-notes .notes-section p {
+    margin: 0.1in 0 !important;
+    line-height: 1.4 !important;
   }
 }
 

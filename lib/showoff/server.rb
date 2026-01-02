@@ -724,8 +724,10 @@ end
       @js_files = (Showoff::Config.get('scripts') || []).map { |f| "file/#{f}" }
 
       # Set wrapper classes for print mode (used by onepage.erb for CSS targeting)
-      # e.g., 'notes' section adds 'print-notes' class for expanded slide heights
-      @wrapper_classes = []
+      # Always add 'print-mode' base class, then add specific mode class
+      # e.g., /print → ['print-mode']
+      #       /print/notes → ['print-mode', 'print-notes']
+      @wrapper_classes = ['print-mode']
       @wrapper_classes << "print-#{section}" if section
 
       # Render the onepage template

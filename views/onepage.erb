@@ -31,7 +31,7 @@
     <% end %>
 
     <% ['jquery-3.7.1.min.js', 'showoff.js', 'highlight.pack-11.11.1.js',
-        'highlightjs-line-numbers.min.js', 'bigtext-0.1.8.js', 'simpleStrings-0.0.1.js', 'mermaid-11.12.2.min.js'].each do |js_file| %>
+        'highlightjs-line-numbers.min.js', 'bigtext-0.1.8.js', 'simpleStrings-0.0.1.js', 'mermaid-11.12.2.min.js', 'mermaid-config.js'].each do |js_file| %>
       <script type="text/javascript" src="js/<%= js_file %>"></script>
     <% end %>
     <% js_files.each do |js_file| %>
@@ -41,27 +41,7 @@
   <% end %>
 
   <script type="text/javascript">
-    // Initialize mermaid before document ready
-    console.log('[MERMAID DEBUG] Initializing mermaid library');
-    // Configure mermaid for print - limit diagram width to fit on page
-    mermaid.initialize({
-      startOnLoad: false,
-      maxTextSize: 50000,
-      flowchart: {
-        useMaxWidth: true,
-        htmlLabels: true
-      },
-      sequence: {
-        useMaxWidth: true
-      },
-      gantt: {
-        useMaxWidth: true
-      },
-      pie: {
-        useMaxWidth: true
-      }
-    });
-
+    // Mermaid initialization is now handled in showoff.js for both presentation and print modes
     $(document).ready(function() {
       console.log('[MERMAID DEBUG] Document ready fired');
       console.log('[MERMAID DEBUG] code.language-render-diagram count:', $('code.language-render-diagram').length);
@@ -104,33 +84,152 @@
         suppressErrors: false
       }).then(function() {
         console.log('[MERMAID DEBUG] mermaid.run() completed');
-        // Fix mermaid SVG scaling for print - force diagrams to fit container width
-        var containerWidth = document.querySelector('.slide .content')?.offsetWidth || 960;
-        document.querySelectorAll('div.mermaid svg').forEach(function(svg) {
-          // Get original viewBox dimensions
-          var viewBox = svg.getAttribute('viewBox');
-          if (viewBox) {
+
+        // Detect print mode from #slides classes
+        var slidesEl = document.getElementById('slides');
+        var isPrintNotes = slidesEl && slidesEl.classList.contains('print-notes');
+        var isPrintMode = slidesEl && slidesEl.classList.contains('print-mode');
+
+        console.log('[MERMAID DEBUG] Print mode detection - isPrintMode:', isPrintMode, 'isPrintNotes:', isPrintNotes);
+
+        // Letter landscape: 11in x 8.5in, minus 0.5in margins = 10in x 7.5in content area
+        // At 72 DPI: 720px width x 540px height available
+        // Different strategies for different print modes:
+
+        if (isPrintNotes) {
+          // NOTES MODE: Use CSS-based sizing instead of transform scaling
+          // Allows browser pagination to work naturally without negative margin confusion
+          // Max dimensions: Very conservative sizing to leave room for headers, padding, and page breaks
+          var maxWidth = 620;  // ~8.6in at 72 DPI
+          var maxHeight = 350; // ~4.9in at 72 DPI - leaves ~2.5in for headers and margins
+
+          console.log('[MERMAID DEBUG] Using print-notes mode scaling (CSS-based)');
+
+          document.querySelectorAll('div.mermaid').forEach(function(container) {
+            var svg = container.querySelector('svg');
+            if (!svg) return;
+
+            var viewBox = svg.getAttribute('viewBox');
+            if (!viewBox) {
+              console.log('[MERMAID DEBUG] No viewBox for', svg.id);
+              return;
+            }
+
             var parts = viewBox.split(' ').map(parseFloat);
             var vbWidth = parts[2];
             var vbHeight = parts[3];
 
-            // If diagram is wider than container, we need to scale
-            if (vbWidth > containerWidth) {
-              console.log('[MERMAID DEBUG] Scaling SVG', svg.id, 'from', vbWidth, 'to fit', containerWidth);
+            // Calculate scale needed to fit constraints
+            var scaleWidth = vbWidth > maxWidth ? maxWidth / vbWidth : 1;
+            var scaleHeight = vbHeight > maxHeight ? maxHeight / vbHeight : 1;
+            var scale = Math.min(scaleWidth, scaleHeight);
+
+            if (scale < 1) {
+              // Use CSS width/height constraints instead of transform
+              // This lets the browser's pagination engine see the actual rendered size
+              var scaledWidth = vbWidth * scale;
+              var scaledHeight = vbHeight * scale;
+
+              console.log('[MERMAID DEBUG] CSS-scaling diagram', svg.id, ':', vbWidth + 'x' + vbHeight,
+                          '-> ' + scaledWidth.toFixed(0) + 'x' + scaledHeight.toFixed(0),
+                          '(scale: ' + scale.toFixed(3) + ')');
+
+              // CRITICAL: Set both CSS dimensions AND SVG attributes
+              // PDF renderer respects SVG width/height attributes more than CSS
+              svg.setAttribute('width', scaledWidth + 'px');
+              svg.setAttribute('height', scaledHeight + 'px');
+              svg.style.width = scaledWidth + 'px';
+              svg.style.height = scaledHeight + 'px';
+              svg.style.maxWidth = 'none';
+              svg.style.maxHeight = 'none';
+
+              // Container should match SVG size
+              container.style.width = scaledWidth + 'px';
+              container.style.height = scaledHeight + 'px';
+              container.style.transform = 'none'; // No transform needed
+            } else {
+              // Diagram fits naturally
+              svg.setAttribute('width', vbWidth + 'px');
+              svg.setAttribute('height', vbHeight + 'px');
+              svg.style.width = vbWidth + 'px';
+              svg.style.height = vbHeight + 'px';
+              container.style.width = vbWidth + 'px';
+              container.style.height = vbHeight + 'px';
+              console.log('[MERMAID DEBUG] Diagram', svg.id, 'fits at', vbWidth + 'x' + vbHeight);
             }
-          }
+          });
 
-          // Force the SVG to fill container width and scale proportionally
-          svg.style.maxWidth = '100%';
-          svg.style.width = '100%';
-          svg.style.height = 'auto';
-          svg.removeAttribute('height'); // Remove fixed height if present
+        } else {
+          // SLIDES-ONLY MODE: Use transform scaling approach
+          // Works fine for strict one-slide-per-page layout
+          var maxWidth = 680;  // Leave room for padding (720 - 40)
+          var maxHeight = 480; // Leave room for padding (540 - 60)
 
-          console.log('[MERMAID DEBUG] Fixed SVG scaling for:', svg.id);
-        });
+          console.log('[MERMAID DEBUG] Using slides-only mode scaling (transform-based)');
+
+          document.querySelectorAll('div.mermaid').forEach(function(container) {
+            var svg = container.querySelector('svg');
+            if (!svg) return;
+
+            var viewBox = svg.getAttribute('viewBox');
+            if (!viewBox) {
+              console.log('[MERMAID DEBUG] No viewBox for', svg.id);
+              return;
+            }
+
+            var parts = viewBox.split(' ').map(parseFloat);
+            var vbWidth = parts[2];
+            var vbHeight = parts[3];
+
+            // Calculate scale needed to fit both width AND height constraints
+            var scaleWidth = vbWidth > maxWidth ? maxWidth / vbWidth : 1;
+            var scaleHeight = vbHeight > maxHeight ? maxHeight / vbHeight : 1;
+            var scale = Math.min(scaleWidth, scaleHeight); // Use most restrictive scale
+
+            if (scale < 1) {
+              // Diagram needs scaling
+              var scaledWidth = vbWidth * scale;
+              var scaledHeight = vbHeight * scale;
+
+              console.log('[MERMAID DEBUG] Transform-scaling diagram', svg.id, ':', vbWidth + 'x' + vbHeight,
+                          '-> ' + scaledWidth.toFixed(0) + 'x' + scaledHeight.toFixed(0),
+                          '(scale: ' + scale.toFixed(3) + ')');
+
+              // Set the SVG to render at its natural size
+              svg.style.width = vbWidth + 'px';
+              svg.style.height = vbHeight + 'px';
+              svg.style.maxWidth = 'none';
+              svg.style.maxHeight = 'none';
+
+              // Scale the container down to fit
+              container.style.transform = 'scale(' + scale + ')';
+              container.style.transformOrigin = 'top left';
+              // Set container to natural size (transform will scale it down)
+              container.style.width = vbWidth + 'px';
+              container.style.height = vbHeight + 'px';
+              // Add negative margin to collapse the extra space created by transform
+              container.style.marginRight = '-' + (vbWidth - scaledWidth) + 'px';
+              container.style.marginBottom = '-' + (vbHeight - scaledHeight) + 'px';
+            } else {
+              // Diagram fits, just ensure it's properly sized
+              svg.style.width = '100%';
+              svg.style.height = 'auto';
+              svg.style.maxWidth = '100%';
+              console.log('[MERMAID DEBUG] Diagram', svg.id, 'fits at', vbWidth + 'x' + vbHeight);
+            }
+          });
+        }
       }).catch(function(err) {
         console.error('[MERMAID DEBUG] mermaid.run() error:', err);
+      }).finally(function() {
+        // Mark page as ready for printing after mermaid rendering completes
+        console.log('[MERMAID DEBUG] Rendering complete, marking page ready for print');
+        document.body.classList.add('mermaid-ready');
+
+        // Dispatch custom event for automated tools
+        window.dispatchEvent(new Event('mermaid-ready'));
       });
+
       $('.content.bigtext').bigtext();
 
       // translate SVG images, inlining them first if needed.
@@ -140,6 +239,57 @@
       $('.translate').simpleStrings({strings: user_translations});
     });
   </script>
+
+  <style type="text/css">
+    /* Hide raw mermaid code until JavaScript transforms it
+       This prevents printing raw code blocks */
+    body:not(.mermaid-ready) code.language-render-diagram {
+      visibility: hidden;
+      position: relative;
+    }
+
+    /* Show loading indicator while mermaid renders */
+    body:not(.mermaid-ready) code.language-render-diagram::after {
+      content: "⏳ Rendering diagram...";
+      visibility: visible;
+      display: block;
+      position: absolute;
+      top: 0;
+      left: 0;
+      color: #666;
+      font-style: italic;
+      padding: 1em;
+      background: #f0f0f0;
+    }
+
+    /* Ensure mermaid diagrams are visible after rendering */
+    body.mermaid-ready div.mermaid {
+      display: block !important;
+      visibility: visible !important;
+    }
+
+    /* Show prominent message if JavaScript fails to run */
+    body:not(.mermaid-ready)::before {
+      content: "⚠️ Waiting for diagrams to render... If this message persists, JavaScript may be disabled.";
+      display: block;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      background: #fff3cd;
+      color: #856404;
+      padding: 1em;
+      text-align: center;
+      font-weight: bold;
+      border-bottom: 2px solid #ffc107;
+      z-index: 9999;
+    }
+
+    /* Hide warning once ready */
+    body.mermaid-ready::before {
+      display: none;
+    }
+  </style>
 
 </head>
 

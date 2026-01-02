@@ -300,37 +300,11 @@ function initializePresentation() {
 
 	setupMenu();
 
-	// Initialize mermaid BEFORE showing slides - must happen before mermaid.run() is called
-	// Render at normal size - the slide's CSS transform will handle scaling in presenter view
-	var ganttWidth = 900;  // Fixed width for consistent rendering
-
-	mermaid.initialize({
-		startOnLoad: false,
-		theme: 'default',
-		maxTextSize: 99999,
-		gantt: {
-			useWidth: ganttWidth,
-			useMaxWidth: false,
-			barHeight: 25,
-			barGap: 6,
-			topPadding: 75,
-			leftPadding: 150,
-			rightPadding: 20,
-			gridLineStartPadding: 40,
-			fontSize: 12,
-			sectionFontSize: 14,
-			titleTopMargin: 40,
-			numberSectionStyles: 4,
-			displayMode: ''
-		},
-		flowchart: {
-			useMaxWidth: true,
-			htmlLabels: true
-		},
-		pie: {
-			useMaxWidth: true
-		}
-	});
+	// Initialize mermaid using centralized config
+	// Presentation themes can override by calling initShowoffMermaid(customTheme)
+	if (window.initShowoffMermaid) {
+		window.initShowoffMermaid();
+	}
 
 	if (slidesLoaded) {
 		showSlide()
